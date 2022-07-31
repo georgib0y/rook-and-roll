@@ -45,6 +45,18 @@ impl MoveTables {
         self.rook_moves[sq][occupancy as usize]
     }
 
+    pub fn get_rook_xray(&self, occupancy: u64, mut blockers: u64, sq: usize) -> u64 {
+        let attacks = self.get_rook_moves(occupancy, sq);
+        blockers &= attacks;
+        attacks ^ self.get_rook_moves(occupancy ^ blockers, sq)
+    }
+
+    pub fn get_bishop_xray(&self, occupancy: u64, mut blockers: u64, sq: usize) -> u64 {
+        let attacks = self.get_bishop_moves(occupancy, sq);
+        blockers &= attacks;
+        attacks ^ self.get_bishop_moves(occupancy ^ blockers, sq)
+    }
+
     // TODO issues probably to do with the shift????
     pub fn get_bishop_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         occupancy &= BISHOP_MASK[sq];

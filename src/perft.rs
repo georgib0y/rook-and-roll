@@ -30,8 +30,8 @@ pub fn perft(
 
     // TODO moved is_in_check into copy make,
 
-    // let check = is_in_check(board, mt);
-    let check = false;
+    let check = is_in_check(board, mt);
+    // let check = false;
     let moves = gen_moves(board, mt, check);
     for m in moves {
         // println!("before");
@@ -41,7 +41,7 @@ pub fn perft(
         //     println!("{board}{b}{m}");
         // }
 
-        if (!check && moved_into_check(&b, &m, &mt)) || !is_legal_move(&b, &m, mt) { continue; }
+        if (!check && moved_into_check(&b, &m, mt)) || !is_legal_move(&b, &m, mt) { continue; }
         mc += perft(&b, depth-1, mt);
     }
 
@@ -59,7 +59,6 @@ pub fn perftree_root(depth: usize, fen: &str, moves_strs: Option<&String>) {
 
     let mut total = 0;
     let check = is_in_check(&board, &mt);
-    dbg!(check);
     for m in gen_moves(&board, &mt, check) {
         let b = board.copy_make(&m);
         if (!check && moved_into_check(&b, &m, &mt)) || !is_legal_move(&b, &m, &mt) { continue; }
@@ -76,7 +75,6 @@ pub fn perftree(board: &Board, depth: usize, mt: &MoveTables) -> usize {
         return 1;
     }
 
-
     let mut move_count = 0;
     let check = is_in_check(board, mt);
     for m in gen_moves(board, mt, check) {
@@ -88,6 +86,20 @@ pub fn perftree(board: &Board, depth: usize, mt: &MoveTables) -> usize {
     move_count
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // TODO outdated

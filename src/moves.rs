@@ -32,35 +32,6 @@ use crate::Board;
 use crate::move_info::SQ_NAMES;
 use crate::movegen::{B_PROMO_CAP, CAP, DOUBLE, EP, get_piece, get_xpiece, KINGSIDE, N_PROMO_CAP, PROMO, Q_PROMO_CAP, QUEENSIDE, QUIET, R_PROMO_CAP};
 
-pub struct Moves {
-    moves: Box<[Move;218]>,
-    count: usize,
-    iter_pos: usize
-}
-
-impl Moves {
-    pub fn new() -> Moves {
-        Moves { moves: Box::new([Move { m: u32::MAX }; 218]), count: 0, iter_pos: 0 }
-    }
-
-    pub fn push(&mut self, m: Move) {
-        self.moves[self.count] = m;
-        self.count += 1;
-    }
-
-    pub fn len(&self) -> usize { self.count }
-}
-
-impl Iterator for Moves {
-    type Item = Move;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let m = self.moves[self.iter_pos];
-        self.iter_pos += 1;
-        if m.m == u32::MAX { None } else { Some(m) }
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub struct Move {
     m: u32

@@ -172,7 +172,7 @@ impl Board {
             b.ep = rank * 8 + file;
         }
 
-        b.halfmove = fen[4].parse().unwrap();
+        b.halfmove = fen.get(4).unwrap_or(&"0").parse().unwrap();
         // b.fullmove = fen[5].parse().unwrap();
 
         b
@@ -341,6 +341,7 @@ impl fmt::Display for Board {
 }
 
 pub fn print_bb(bb: u64) {
+
     let mut out = String::new();
 
     for i in (1..9).rev() {
