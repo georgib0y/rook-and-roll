@@ -28,7 +28,6 @@ pub fn gen_moves(b: &Board, mt: &MoveTables, check: bool) -> Vec<Move> {
     }
 }
 
-// TODO perft fixed itself when adding "blockers" to pawn moves"... idk
 pub fn gen_all_moves(b: &Board, mt: &MoveTables) -> Vec<Move> {
     let mut moves = Vec::with_capacity(218);
     if b.colour_to_move == 0 {
@@ -56,18 +55,12 @@ pub fn gen_all_moves(b: &Board, mt: &MoveTables) -> Vec<Move> {
 
 // gen all legal moves
 pub fn gen_check_moves(b: &Board, mt: &MoveTables) -> Vec<Move> {
-    let mut moves = Vec::with_capacity(150);
+    let mut moves = Vec::with_capacity(75);
     let ksq = b.pieces[KING+b.colour_to_move].trailing_zeros() as usize;
     // generate legal king moves
     gen_king_in_check(&mut moves, b, mt);
-    let attackers = get_attackers(
-        b,
-        b.colour_to_move^1,
-        ksq,
-        mt
-    );
+    let attackers = get_attackers(b, b.colour_to_move^1, ksq, mt);
 
-    // print_bb(attackers);
     // if double check then can return just the king moves
     if attackers.count_ones() == 2 {
         return moves;
@@ -78,31 +71,24 @@ pub fn gen_check_moves(b: &Board, mt: &MoveTables) -> Vec<Move> {
     let pinners = mt.get_rook_xray(b.util[2], b.util[b.colour_to_move], ksq) |
         mt.get_bishop_xray(b.util[2], b.util[b.colour_to_move], ksq);
 
-    // print_bb(pinners);
     // for every opp sliding piece gen moves and add any point where they intersect with the kings
     let mut rq = b.pieces[ROOK+(b.colour_to_move^1)] | b.pieces[QUEEN+(b.colour_to_move^1)];
     rq &= pinners;
     while rq > 0 {
         let rq_sq = rq.trailing_zeros() as usize;
-        pinned |= mt.rays[1][ksq] & mt.rays[5][rq_sq];
-        pinned |= mt.rays[3][ksq] & mt.rays[7][rq_sq];
-        pinned |= mt.rays[5][ksq] & mt.rays[1][rq_sq];
-        pinned |= mt.rays[7][ksq] & mt.rays[3][rq_sq];
+        pinned |= (mt.rays[1][ksq] & mt.rays[5][rq_sq]) | (mt.rays[3][ksq] & mt.rays[7][rq_sq]) |
+            (mt.rays[5][ksq] & mt.rays[1][rq_sq]) | (mt.rays[7][ksq] & mt.rays[3][rq_sq]);
         rq &= rq - 1;
     }
 
     let mut bq = b.pieces[BISHOP+(b.colour_to_move^1)] | b.pieces[QUEEN+(b.colour_to_move^1)];
     bq &= pinners;
-    // print_bb(bq);
     while bq > 0 {
         let bq_sq = bq.trailing_zeros() as usize;
-        pinned |= mt.rays[0][ksq] & mt.rays[4][bq_sq];
-        pinned |= mt.rays[2][ksq] & mt.rays[6][bq_sq];
-        pinned |= mt.rays[4][ksq] & mt.rays[0][bq_sq];
-        pinned |= mt.rays[6][ksq] & mt.rays[2][bq_sq];
+        pinned |= (mt.rays[0][ksq] & mt.rays[4][bq_sq]) | (mt.rays[2][ksq] & mt.rays[6][bq_sq]) |
+            (mt.rays[4][ksq] & mt.rays[0][bq_sq]) | (mt.rays[6][ksq] & mt.rays[2][bq_sq]);
         bq &= bq - 1;
     }
-
 
     // try to cap the piece
     if b.colour_to_move == 0 {
@@ -126,10 +112,9 @@ pub fn gen_check_moves(b: &Board, mt: &MoveTables) -> Vec<Move> {
         // get the positive ray from the lesser sq in the direction of the upper sq)
         // & with the lower bits of the higher square (sq - 1), this will give the moves inbetween
         let dir = get_pos_ray_dir(lower,higher,mt);
+
         // inverted to keep compatibility with b.util[2]
         let inbetween = !(mt.rays[dir][lower as usize] & (SQUARES[higher as usize] - 1));
-
-        // print_bb(inbetween);
 
         if b.colour_to_move == 0 {
             gen_wpawn_quiet(&mut moves, b.pieces[b.colour_to_move] & !pinned, inbetween, b.util[2]);
@@ -158,10 +143,6 @@ fn gen_wpawn_quiet(moves: &mut Vec<Move>, pawns: u64, occ: u64, blockers: u64) {
     // get all pawns that can promo
     let mut promo = (pawns & R7) & !(occ >> 8);
 
-    // print_bb(push);
-    // print_bb(double);
-    // print_bb(promo);
-
     while push > 0 {
         let from = push.trailing_zeros();
         let to = from+8;
@@ -185,22 +166,14 @@ fn gen_wpawn_quiet(moves: &mut Vec<Move>, pawns: u64, occ: u64, blockers: u64) {
         moves.push(Move::new(from, to, 0, 6, PROMO));
         promo &= promo - 1;
     }
-
 }
 
 fn gen_wpawn_attack(moves: &mut Vec<Move>, pawns: u64, b: &Board, opp: u64) {
     // shift all opponent pieces down right to match all pawns that wouldnt promote
     let mut up_lefts = (pawns & !FA & !R7) & (opp >> 7);
-    // all possible up left promo captures
     let mut up_left_promos = (pawns & !FA & R7) & (opp >> 7);
-
     let mut up_rights = (pawns & !FH & !R7) & (opp >> 9);
     let mut up_right_promos = (pawns & !FH & R7) & (opp >> 9);
-
-    // print_bb(up_lefts);
-    // print_bb(up_left_promos);
-    // print_bb(up_rights);
-    // print_bb(up_right_promos);
 
     while up_lefts > 0 {
         let from = up_lefts.trailing_zeros();
@@ -240,17 +213,14 @@ fn gen_wpawn_attack(moves: &mut Vec<Move>, pawns: u64, b: &Board, opp: u64) {
 
     // if ep is set, check to see if any pawns can take and pawn is present (for check movegen)
     // SQUARES[64] == 0 so this works even if b.ep == 64
-    // print_bb()
     if SQUARES[b.ep] & (opp << 8) > 0 {
         // shift all pawns up left and check
         if SQUARES[b.ep] & ((pawns & !FA) << 7) > 0 {
-            // print_bb(SQUARES[b.ep] & ((pawn_bb & !FA) << 7));
             moves.push(Move::new((b.ep-7) as u32, b.ep as u32, 0, 1, EP));
-        // shift all pawns up right
         }
 
+        // shift all pawns up right
         if SQUARES[b.ep] & ((pawns & !FH) << 9) > 0 {
-            // print_bb(SQUARES[b.ep] & ((pawn_bb & !FH) << 9));
             moves.push(Move::new((b.ep-9) as u32, b.ep as u32, 0, 1, EP));
         }
     }
@@ -263,7 +233,7 @@ fn gen_bpawn_quiet(moves: &mut Vec<Move>, pawns: u64, occ: u64, blockers: u64) {
 
     while push > 0 {
         let from = push.trailing_zeros();
-        let to = from-8;
+        let to = from - 8;
         moves.push(Move::new(from, to, 1, 0, QUIET));
         push &= push - 1;
     }
@@ -284,7 +254,6 @@ fn gen_bpawn_quiet(moves: &mut Vec<Move>, pawns: u64, occ: u64, blockers: u64) {
         moves.push(Move::new(from, to, 1, 7, PROMO));
         promo &= promo - 1;
     }
-
 }
 
 fn gen_bpawn_attack(moves: &mut Vec<Move>, pawns: u64, b: &Board, opp: u64) {
@@ -392,7 +361,6 @@ fn gen_knight_attacks(moves: &mut Vec<Move>, mut knights: u64, b: &Board, mt: &M
 fn gen_rook_quiet(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, mt: &MoveTables, occ: u64) {
     while rooks > 0 {
         let from = rooks.trailing_zeros();
-        // TODO i assume the get rook moves returns upto and including the blockers
         let mut quiet = mt.get_rook_moves(
             b.util[2],
             rooks.trailing_zeros() as usize
@@ -414,7 +382,6 @@ fn gen_rook_quiet(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, mt: &MoveTab
 fn gen_rook_attacks(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, mt: &MoveTables, opp: u64) {
     while rooks > 0 {
         let from = rooks.trailing_zeros();
-        // TODO i assume the get rook moves returns upto and including the blockers
         let mut attack = mt.get_rook_moves(
             b.util[2],
             rooks.trailing_zeros() as usize
@@ -442,7 +409,6 @@ fn gen_rook_attacks(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, mt: &MoveT
 fn gen_bishop_quiet(moves: &mut Vec<Move>, mut bishops: u64, b: &Board, mt: &MoveTables, occ: u64) {
     while bishops > 0 {
         let from = bishops.trailing_zeros();
-        // TODO i assume the get bishop moves returns upto and including the blockers
         let mut quiet = mt.get_bishop_moves(
             b.util[2],
             bishops.trailing_zeros() as usize
@@ -487,7 +453,6 @@ fn gen_bishop_attacks(moves: &mut Vec<Move>, mut bishops: u64, b: &Board, mt: &M
 fn gen_queen_quiet(moves: &mut Vec<Move>, mut queens: u64, b: &Board, mt: &MoveTables, occ: u64) {
     while queens > 0 {
         let from = queens.trailing_zeros();
-        // TODO i assume the get bishop moves returns upto and including the blockers
         let mut quiet = mt.get_rook_moves(b.util[2],queens.trailing_zeros() as usize);
         quiet |= mt.get_bishop_moves(b.util[2], queens.trailing_zeros() as usize );
         quiet &= !occ;
@@ -508,7 +473,6 @@ fn gen_queen_quiet(moves: &mut Vec<Move>, mut queens: u64, b: &Board, mt: &MoveT
 fn gen_queen_attacks(moves: &mut Vec<Move>, mut queens: u64, b: &Board, mt: &MoveTables, opp: u64) {
     while queens > 0 {
         let from = queens.trailing_zeros();
-        // TODO i assume the get rook moves returns upto and including the blockers
         let mut attack = mt.get_rook_moves(b.util[2], queens.trailing_zeros() as usize);
         attack |= mt.get_bishop_moves(b.util[2], queens.trailing_zeros() as usize);
         attack &= opp;
@@ -715,19 +679,22 @@ pub fn sq_attacked(b: &Board, sq: usize, occ: u64, colour_to_move: usize, mt: &M
     attackers != 0
 }
 
+// #[inline(always)]
 pub fn moved_into_check(b: &Board, m: &Move, mt: &MoveTables) -> bool {
     let ksq = b.pieces[KING+(b.colour_to_move^1)].trailing_zeros() as usize;
-    // the m from sq is inline with the king or piece is a king return sq_attacked, otherwise false
-    (SQUARES[m.from() as usize] & mt.superray(ksq) > 0 || m.piece() >= KING as u32) &&
+    // the m from sq is inline with the king return sq_attacked, otherwise false
+    SQUARES[m.from() as usize] & mt.superrays[ksq] > 0 &&
         sq_attacked(b, ksq, b.util[2], b.colour_to_move, mt)
 }
 
+// #[inline(always)]
 pub fn _moved_into_check(b: &Board, m: &Move, mt: &MoveTables) -> bool {
     sq_attacked(b, b.pieces[KING+(b.colour_to_move^1)].trailing_zeros() as usize,
         b.util[2], b.colour_to_move, mt)
 
 }
 
+#[inline(always)]
 pub fn is_in_check(b: &Board, mt: &MoveTables) -> bool {
     sq_attacked(b, b.pieces[KING+b.colour_to_move].trailing_zeros() as usize,
                 b.util[2], b.colour_to_move^1, mt)

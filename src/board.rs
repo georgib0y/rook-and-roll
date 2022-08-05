@@ -4,6 +4,7 @@ use std::fmt;
 use crate::move_info::SQUARES;
 use crate::moves::Move;
 use crate::movegen::*;
+use crate::MoveTables;
 
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 2;
@@ -12,20 +13,16 @@ pub const BISHOP: usize = 6;
 pub const QUEEN: usize = 8;
 pub const KING: usize = 10;
 
+// 0 - white to move, 1 - black to move
+
 #[derive(Copy, Clone)]
 pub struct Board {
     pub pieces: [u64; 12],
     pub util: [u64; 3],
-
-    // 0 - white to move, 1 - black to move
     pub colour_to_move: usize,
-
     pub castle_state: u8,
     pub ep: usize,
-
     pub halfmove: usize,
-    // TODO i dont think fullmove is needed?
-    //pub fullmove: usize,
 }
 
 impl Board {
@@ -61,11 +58,10 @@ impl Board {
             castle_state: 0b1111,
             ep: 64,
             halfmove: 0,
-            //fullmove: 0
         }
     }
 
-    pub fn new_fen(fen: &str) -> Board {
+    pub fn new_fen(fen: &str, mt: &MoveTables) -> Board {
         let mut b = Board::new();
         // clear the board
         b.pieces = [0;12];
@@ -173,13 +169,12 @@ impl Board {
         }
 
         b.halfmove = fen.get(4).unwrap_or(&"0").parse().unwrap();
-        // b.fullmove = fen[5].parse().unwrap();
-
+        
         b
     }
 
-    pub fn copy_make(&self, m: &Move) -> Board {
-        // copy
+    pub fn copy_make(&self, m: &Move, mt: &MoveTables) -> Board {
+        // copy board
         let mut b = *self;
 
         // flip from and to bits on relevant boards
@@ -279,7 +274,7 @@ impl Board {
         }
 
         b.colour_to_move ^= 1;
-
+        
         b
     }
 }

@@ -28,19 +28,11 @@ pub fn perft(
 
     let mut mc = 0;
 
-    // TODO moved is_in_check into copy make,
-
     let check = is_in_check(board, mt);
     // let check = false;
     let moves = gen_moves(board, mt, check);
     for m in moves {
-        // println!("before");
-        let b = board.copy_make(&m);
-        // println!("after");
-        // if check {
-        //     println!("{board}{b}{m}");
-        // }
-
+        let b = board.copy_make(&m, mt);
         if (!check && moved_into_check(&b, &m, mt)) || !is_legal_move(&b, &m, mt) { continue; }
         mc += perft(&b, depth-1, mt);
     }
@@ -49,18 +41,18 @@ pub fn perft(
 }
 
 pub fn perftree_root(depth: usize, fen: &str, moves_strs: Option<&String>) {
-    let mut board = Board::new_fen(fen);
     let mt = MoveTables::new_boxed();
+    let mut board = Board::new_fen(fen, &mt);
     if let Some(moves_str) = moves_strs {
         for m in moves_str.split(' ') {
-            board = board.copy_make(&Move::new_from_text(m, &board));
+            board = board.copy_make(&Move::new_from_text(m, &board), &mt);
         }
     }
 
     let mut total = 0;
     let check = is_in_check(&board, &mt);
     for m in gen_moves(&board, &mt, check) {
-        let b = board.copy_make(&m);
+        let b = board.copy_make(&m, &mt);
         if (!check && moved_into_check(&b, &m, &mt)) || !is_legal_move(&b, &m, &mt) { continue; }
         let count = perftree(&b, depth - 1, &mt);
         println!("{} {}", m.as_uci_string(), count);
@@ -78,7 +70,7 @@ pub fn perftree(board: &Board, depth: usize, mt: &MoveTables) -> usize {
     let mut move_count = 0;
     let check = is_in_check(board, mt);
     for m in gen_moves(board, mt, check) {
-        let b = board.copy_make(&m);
+        let b = board.copy_make(&m, &mt);
         if (!check && moved_into_check(&b, &m, &mt)) || !is_legal_move(&b, &m, mt) { continue; }
         move_count += perftree(&b, depth - 1, mt);
     }
@@ -87,33 +79,19 @@ pub fn perftree(board: &Board, depth: usize, mt: &MoveTables) -> usize {
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// TODO outdated
 pub fn perft_mt_root(board: Arc<Board>, depth: usize, mt: Arc<MoveTables>, workers: usize) -> usize {
 
     let pool = ThreadPool::new(workers);
     let move_count: Arc<Mutex<usize>> = Arc::new(Mutex::new( 0));
-    for m in gen_moves(board.as_ref(), mt.as_ref(), false) {
+    let check = is_in_check(&board, &mt);
+    for m in gen_moves(&board, &mt, check) {
         let mut move_count_clone = Arc::clone(&move_count);
         let mt_clone = Arc::clone(&mt);
         let board_clone = Arc::clone(&board);
+        if (!check && moved_into_check(&board_clone, &m, &mt)) || !is_legal_move(&board_clone, &m, &mt) { continue; }
         pool.execute(move || {
-            let b = board_clone.copy_make(&m);
-            let mc = perft_mt(&b, depth - 1, &mt_clone);
+            let b = board_clone.copy_make(&m, &mt_clone);
+            let mc = perft(&b, depth - 1, &mt_clone);
             let mut total_mc = move_count_clone.lock().unwrap();
             *total_mc += mc;
         });
@@ -124,28 +102,6 @@ pub fn perft_mt_root(board: Arc<Board>, depth: usize, mt: Arc<MoveTables>, worke
     *total
 }
 
-// TODO outdated
-pub fn perft_mt(
-    board: &Board,
-    depth: usize,
-    mt: &MoveTables,
-) -> usize {
-
-    if depth == 0 {
-        return 1;
-    }
-
-    let mut move_count = 0;
-    let check = is_in_check(board, mt);
-    for m in gen_moves(board, mt, check) {
-        // println!("{m}");
-        let b = board.copy_make(&m);
-        if !check && moved_into_check(board, &m, mt) { continue; }
-        move_count += perft_mt(&b, depth-1, mt);
-    }
-
-    move_count
-}
 
 // TODO also outdated and possibly unneeded
 pub fn perft_debug(
@@ -164,7 +120,7 @@ pub fn perft_debug(
 
     for m in gen_moves(board, mt, false) {
         // println!("{m}");
-        let b = board.copy_make(&m);
+        let b = board.copy_make(&m, &mt);
         if moved_into_check(board, &m, mt) { continue; }
         perft_debug(&b, depth-1, mt, Some(&m), counter)
     }

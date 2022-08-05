@@ -7,25 +7,28 @@ use crate::move_info::{BISHOP_MAGIC, BISHOP_MASK, FA, FB, FG, FH, R1, R3, R6, R8
 use crate::moves::Move;
 use crate::print_bb;
 
+pub const R_BIT: i32 = 12;
+pub const B_BIT: i32 = 9;
+
 pub struct MoveTables {
-    pub pawn_moves: [[u64;64];2],
     pub pawn_attacks: [[u64;64];2],
     pub knight_moves: [u64;64],
     pub king_moves: [u64;64],
     pub rook_moves: [[u64; 4096]; 64],
     pub bishop_moves: [[u64; 512]; 64],
+    pub superrays: [u64; 64],
     pub rays: &'static [[u64; 65]; 8],
 }
 
 impl MoveTables {
     pub fn new() -> MoveTables {
         MoveTables {
-            pawn_moves: gen_pawn_move_table(),
             pawn_attacks: gen_pawn_attack_table(),
             knight_moves: gen_knight_move_table(),
             king_moves: gen_king_move_table(),
             rook_moves: gen_rook_move_table(),
             bishop_moves: gen_bishop_move_table(),
+            superrays: gen_superray(),
             rays: &RAYS
         }
     }
@@ -36,12 +39,10 @@ impl MoveTables {
     
     pub fn new_arc() -> Arc<MoveTables> { Arc::new(MoveTables::new()) }
 
-    //noinspection ALL
-    // TODO dont get the shiftin biz
     pub fn get_rook_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         occupancy &= ROOK_MASK[sq];
         occupancy = occupancy.wrapping_mul(ROOK_MAGIC[sq]);
-        occupancy >>= 64 - R_BIT; // (64-12)
+        occupancy >>= 64 - R_BIT;
         self.rook_moves[sq][occupancy as usize]
     }
 
@@ -57,40 +58,12 @@ impl MoveTables {
         attacks ^ self.get_bishop_moves(occupancy ^ blockers, sq)
     }
 
-    // TODO issues probably to do with the shift????
     pub fn get_bishop_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         occupancy &= BISHOP_MASK[sq];
         occupancy = occupancy.wrapping_mul(BISHOP_MAGIC[sq]);
         occupancy >>= 64 - B_BIT;
         self.bishop_moves[sq][occupancy as usize]
     }
-
-    pub fn superray(&self, sq: usize) -> u64 {
-        self.rays[0][sq] | self.rays[1][sq] | self.rays[2][sq] | self.rays[3][sq] |
-            self.rays[4][sq] | self.rays[5][sq] | self.rays[6][sq] | self.rays[7][sq]
-    }
-}
-
-fn gen_pawn_move_table() -> [[u64;64];2] {
-    let mut pawn_moves = [[0;64];2];
-
-    for (i, sq) in SQUARES.iter().enumerate().take(64) {
-        // white pawns
-        if sq & R3 > 0 {
-            pawn_moves[0][i] = sq << 8 | sq << 16
-        } else {
-            pawn_moves[0][i] = (sq & !R8) << 8
-        }
-
-        // black pawns
-        if sq & R6 > 0 {
-            pawn_moves[1][i] = sq >> 8 | sq >> 16;
-        } else {
-            pawn_moves[1][i] = (sq & !R1) >> 8;
-        }
-    }
-
-    pawn_moves
 }
 
 fn gen_pawn_attack_table() -> [[u64;64];2] {
@@ -187,6 +160,20 @@ fn gen_bishop_move_table() -> [[u64; 512]; 64] {
 
     bishop_moves
 }
+
+fn gen_superray() -> [u64; 64] {
+    let mut superray = [0; 64];
+    for sq in 0..64 {
+        superray[sq] = RAYS[0][sq] | RAYS[1][sq] | RAYS[2][sq] | RAYS[3][sq] |
+            RAYS[4][sq] | RAYS[5][sq] | RAYS[6][sq] | RAYS[7][sq]
+    }
+
+    superray
+}
+
+
+// FOLLOWING CODE IS FROM https://www.chessprogramming.org/Looking_for_Magics
+// only used for generating the magic numbers (not used in actual running)
 
 fn rand_few_bit_u64() -> u64 {
     let mut rng = rand::thread_rng();
@@ -375,21 +362,3 @@ pub fn print_new_magics() {
     }
     println!("];");
 }
-
-// TODO Uneeeded if going down the fixed shift route
-// rbits is now 12
-pub const R_BITS: [i32;64] = [
-    12, 11, 11, 11, 11, 11, 11, 12, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 
-    11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11, 
-    11, 10, 10, 10, 10, 10, 10, 11, 12, 11, 11, 11, 11, 11, 11, 12
-];
-
-// bbit is now 9
-pub const B_BITS: [i32;64] = [
-    6, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 
-    5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 7, 7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 6
-];
-
-pub const R_BIT: i32 = 12;
-pub const B_BIT: i32 = 9;
-

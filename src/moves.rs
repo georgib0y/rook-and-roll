@@ -38,7 +38,6 @@ pub struct Move {
 }
 
 impl Move {
-    // TODO look into smid for shifting all values at once? nah probs not but still
     pub fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: u32) -> Move {
         //dbg!(from, to, piece, xpiece, move_type);
         Move { m: from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type }
