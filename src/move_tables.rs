@@ -11,12 +11,12 @@ pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
 
 pub struct MoveTables {
-    pub pawn_attacks: [[u64;64];2],
-    pub knight_moves: [u64;64],
-    pub king_moves: [u64;64],
-    pub rook_moves: [[u64; 4096]; 64],
-    pub bishop_moves: [[u64; 512]; 64],
-    pub superrays: [u64; 64],
+    pub pawn_attacks: Box<[[u64;64]]>,
+    pub knight_moves: Box<[u64]>,
+    pub king_moves: Box<[u64]>,
+    pub rook_moves: Box<[[u64; 4096]]>,
+    pub bishop_moves: Box<[[u64; 512]]>,
+    pub superrays: Box<[u64]>,
     pub rays: &'static [[u64; 65]; 8],
 }
 
@@ -33,10 +33,6 @@ impl MoveTables {
         }
     }
 
-    pub fn new_boxed() -> Box<MoveTables> {
-        Box::new(MoveTables::new())
-    }
-    
     pub fn new_arc() -> Arc<MoveTables> { Arc::new(MoveTables::new()) }
 
     pub fn get_rook_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
@@ -66,8 +62,8 @@ impl MoveTables {
     }
 }
 
-fn gen_pawn_attack_table() -> [[u64;64];2] {
-    let mut pawn_attacks = [[0;64];2];
+fn gen_pawn_attack_table() -> Box<[[u64; 64]]> {
+    let mut pawn_attacks = vec![[0;64];2];
 
     for (i, sq) in SQUARES.iter().enumerate().take(64) {
         //white
@@ -81,11 +77,11 @@ fn gen_pawn_attack_table() -> [[u64;64];2] {
         }
     }
 
-    pawn_attacks
+    pawn_attacks.into_boxed_slice()
 }
 
-fn gen_knight_move_table() -> [u64;64] {
-    let mut knight_moves = [0;64];
+fn gen_knight_move_table() -> Box<[u64]> {
+    let mut knight_moves = vec![0;64];
 
     for index in 0..64 {
         let mut mv = 0;
@@ -102,11 +98,11 @@ fn gen_knight_move_table() -> [u64;64] {
         knight_moves[index] = mv;
     }
 
-    knight_moves
+    knight_moves.into_boxed_slice()
 }
 
-fn gen_king_move_table() -> [u64;64] {
-    let mut king_moves = [0;64];
+fn gen_king_move_table() -> Box<[u64]> {
+    let mut king_moves = vec![0;64];
 
     for index in 0..64 {
         let mut mv = 0;
@@ -125,11 +121,11 @@ fn gen_king_move_table() -> [u64;64] {
         king_moves[index] = mv;
     }
 
-    king_moves
+    king_moves.into_boxed_slice()
 }
 
-fn gen_rook_move_table() -> [[u64; 4096]; 64] {
-    let mut rook_moves = [[0;4096];64];
+fn gen_rook_move_table() -> Box<[[u64; 4096]]> {
+    let mut rook_moves = vec![[0;4096];64];
     for sq in 0..64 {
         for blocker_idx in 0..(1 << R_BIT) {
             // add rook moves
@@ -142,11 +138,11 @@ fn gen_rook_move_table() -> [[u64; 4096]; 64] {
         }
     }
 
-    rook_moves
+    rook_moves.into_boxed_slice()
 }
 
-fn gen_bishop_move_table() -> [[u64; 512]; 64] {
-    let mut bishop_moves = [[0;512];64];
+fn gen_bishop_move_table() -> Box<[[u64; 512]]> {
+    let mut bishop_moves = vec![[0;512];64];
     for sq in 0..64 {
         for blocker_idx in 0..(1<<B_BIT) {
             let blockers = index_to_u64(blocker_idx,
@@ -158,17 +154,17 @@ fn gen_bishop_move_table() -> [[u64; 512]; 64] {
         }
     }
 
-    bishop_moves
+    bishop_moves.into_boxed_slice()
 }
 
-fn gen_superray() -> [u64; 64] {
-    let mut superray = [0; 64];
+fn gen_superray() -> Box<[u64]> {
+    let mut superray = vec![0; 64];
     for sq in 0..64 {
         superray[sq] = RAYS[0][sq] | RAYS[1][sq] | RAYS[2][sq] | RAYS[3][sq] |
             RAYS[4][sq] | RAYS[5][sq] | RAYS[6][sq] | RAYS[7][sq]
     }
 
-    superray
+    superray.into_boxed_slice()
 }
 
 

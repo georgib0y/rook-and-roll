@@ -35,7 +35,7 @@ fn main() {
 }
 
 fn debug() {
-    let mt = MoveTables::new_boxed();
+    let mt = MoveTables::new();
     let mut b = Board::new_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", &mt);
     println!("{b}");
     let extra_moves = String::from("a2a4 a6b5 a4b5 c7c5");
@@ -60,7 +60,7 @@ fn debug() {
 
 fn do_perf() {
     let b = Board::new();
-    let mt = MoveTables::new_boxed();
+    let mt = MoveTables::new();
     // let b = Board::new_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", &mt);
     let depth = 6;
     let start = Instant::now();
@@ -91,7 +91,7 @@ fn do_perf_mt() {
 fn do_perf_counter() {
     let depth = 4;
     let b = Board::new();
-    let mt = MoveTables::new_boxed();
+    let mt = MoveTables::new();
     let mut counter = Counter::new();
     // println!("{}", movegen::gen_all_moves(&b, &mt).len());
     perft_debug(&b, depth, &mt, None, &mut counter);

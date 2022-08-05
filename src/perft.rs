@@ -41,7 +41,7 @@ pub fn perft(
 }
 
 pub fn perftree_root(depth: usize, fen: &str, moves_strs: Option<&String>) {
-    let mt = MoveTables::new_boxed();
+    let mt = MoveTables::new();
     let mut board = Board::new_fen(fen, &mt);
     if let Some(moves_str) = moves_strs {
         for m in moves_str.split(' ') {
