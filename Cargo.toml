@@ -1,3 +1,5 @@
+
+
 [package]
 name = "rookandroll"
 version = "0.1.0"
@@ -7,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
+rand_distr = "0.4.3"
 rayon = "1.5.3"
 threadpool = "1.8.1"
 

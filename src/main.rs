@@ -1,16 +1,25 @@
 #![allow(unused)]
+extern crate core;
 
 use std::env;
 use std::env::args;
+use std::ptr::null;
 use std::sync::Arc;
 use std::time::Instant;
 
+use rand::prelude::*;
+use rand_distr::Normal;
+use threadpool::ThreadPool;
+
+
 use crate::board::{Board, print_bb};
+use crate::EntryType::Set;
 use crate::move_info::BISHOP_MASK;
 use crate::move_tables::{B_BIT, find_magic, MoveTables, print_new_magics, R_BIT, ratt};
 use crate::movegen::{gen_all_moves, gen_check_moves, is_in_check, is_legal_move, moved_into_check, sq_attacked};
 use crate::moves::Move;
 use crate::perft::{Counter, perft_debug, perftree_root, perft, perft_mt_root};
+use crate::tt::{EntryType, SeqTT, AtomicTT, UNSET_TT_FLAG, SET_TT_FLAG};
 
 mod board;
 mod move_tables;
@@ -19,11 +28,20 @@ mod movegen;
 mod perft;
 mod move_info;
 mod opening_book;
+mod search;
+mod eval;
+mod uci;
+mod tt;
+
 
 fn main() {
     if args().count() > 1 {
         do_perftree();
         return;
+    }
+
+    unsafe {
+        move_tables::MT = Some(MoveTables::new());
     }
 
     do_perf();

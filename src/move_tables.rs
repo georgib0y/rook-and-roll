@@ -7,6 +7,9 @@ use crate::move_info::{BISHOP_MAGIC, BISHOP_MASK, FA, FB, FG, FH, R1, R3, R6, R8
 use crate::moves::Move;
 use crate::print_bb;
 
+pub static mut MT: Option<MoveTables> = None;
+
+
 pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
 

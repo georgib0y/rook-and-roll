@@ -643,32 +643,10 @@ pub fn get_xpiece(b: &Board, index: u32) -> u32 {
 // colour_to_move is the colour that IS ATTACKING
 // occ is the bb that is fed to the magic bb function (for hiding the king in check move gen)
 pub fn sq_attacked(b: &Board, sq: usize, occ: u64, colour_to_move: usize, mt: &MoveTables) -> bool {
-    // let pawns = b.pieces[PAWN + colour_to_move];
-    // if mt.pawn_attacks[colour_to_move^1][sq] & pawns > 0 { return true; }
-    //
-    // let knights = b.pieces[KNIGHT + colour_to_move];
-    // if mt.knight_moves[sq] & knights > 0 { return true; }
-    //
-    // let king = b.pieces[KING + colour_to_move];
-    // if mt.king_moves[sq] & king > 0  { return true; }
-    //
-    // let bishop_queen = b.pieces[QUEEN + colour_to_move] | b.pieces[BISHOP + colour_to_move];
-    // if mt.get_bishop_moves(occ, sq) & bishop_queen > 0 { return true; }
-    //
-    // let rook_queen = b.pieces[ROOK + colour_to_move] | b.pieces[QUEEN + colour_to_move];
-    // if mt.get_rook_moves(occ, sq) & rook_queen > 0 { return true; }
-    //
-    // false
-
     let mut attackers = 0;
-    let pawns = b.pieces[PAWN + colour_to_move];
-    attackers |= mt.pawn_attacks[colour_to_move^1][sq] & pawns;
-
-    let knights = b.pieces[KNIGHT + colour_to_move];
-    attackers |= mt.knight_moves[sq] & knights;
-
-    let king = b.pieces[KING + colour_to_move];
-    attackers |= mt.king_moves[sq] & king;
+    attackers |= mt.pawn_attacks[colour_to_move^1][sq] & b.pieces[PAWN + colour_to_move];
+    attackers |= mt.knight_moves[sq] & b.pieces[KNIGHT + colour_to_move];
+    attackers |= mt.king_moves[sq] & b.pieces[KING + colour_to_move];
 
     let bishop_queen = b.pieces[QUEEN + colour_to_move] | b.pieces[BISHOP + colour_to_move];
     attackers |= mt.get_bishop_moves(occ, sq) & bishop_queen;
