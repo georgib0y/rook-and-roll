@@ -18,7 +18,8 @@ use crate::move_info::BISHOP_MASK;
 use crate::move_tables::{B_BIT, find_magic, MoveTables, print_new_magics, R_BIT, ratt};
 use crate::movegen::{gen_all_moves, gen_check_moves, is_in_check, is_legal_move, moved_into_check, sq_attacked};
 use crate::moves::Move;
-use crate::perft::{Counter, perft_debug, perftree_root, perft, perft_mt_root};
+use crate::perft::{perftree_root, perft, perft_mt_root};
+use crate::search::iterative_deepening;
 use crate::tt::{EntryType, SeqTT, AtomicTT, UNSET_TT_FLAG, SET_TT_FLAG};
 
 mod board;
@@ -40,12 +41,9 @@ fn main() {
         return;
     }
 
-    unsafe {
-        move_tables::MT = Some(MoveTables::new());
-    }
-
-    do_perf();
-    // do_perf_mt();
+    // do_search();
+    // do_perf();
+    do_perf_mt();
     // debug();
     // do_perftree();
 
@@ -54,20 +52,20 @@ fn main() {
 
 fn debug() {
     let mt = MoveTables::new();
-    let mut b = Board::new_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", &mt);
+    let mut b = Board::new_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -");
     println!("{b}");
     let extra_moves = String::from("a2a4 a6b5 a4b5 c7c5");
     for m_str in extra_moves.split(' ') {
         let m = Move::new_from_text(m_str, &b);
         println!("{m}");
-        b = b.copy_make(&m, &mt);
+        b = b.copy_make(&m);
     }
     println!("{b}");
-    let moves = gen_all_moves(&b, &mt);
+    let moves = gen_all_moves(&b);
     // let moves = gen_check_moves(&b, &mt);
     moves.iter()
-        .filter(|m| is_legal_move(&b,m,&mt))
-        .for_each(|m| println!("{}\n{}", m, moved_into_check(&b, m, &mt)));
+        .filter(|m| is_legal_move(&b,m))
+        .for_each(|m| println!("{}\n{}", m, moved_into_check(&b, m)));
 
     dbg!(moves.len());
     // dbg!(moves[0]);
@@ -76,13 +74,20 @@ fn debug() {
     // dbg!(is_in_check(&b, &mt));
 }
 
+fn do_search() {
+    let board = Board::new();
+    // let board = Board::new_fen("");
+    let best_move = iterative_deepening(&board);
+    println!("best move: {}", best_move.unwrap().as_uci_string());
+}
+
 fn do_perf() {
     let b = Board::new();
     let mt = MoveTables::new();
     // let b = Board::new_fen("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", &mt);
     let depth = 6;
     let start = Instant::now();
-    let mc = perft(&b, depth, &mt);
+    let mc = perft(&b, depth);
     let stop = start.elapsed();
     println!("Depth: {depth}\t\tMoves: {mc}\t\tTime: {}ms", stop.as_millis());
 }
@@ -101,17 +106,7 @@ fn do_perf_mt() {
     let mt = MoveTables::new_arc();
     let depth = 6;
     let start = Instant::now();
-    let mc = perft_mt_root(Arc::new(b), depth, mt, 12);
+    let mc = perft_mt_root(Arc::new(b), depth, 12);
     let stop = start.elapsed();
     println!("Depth: {depth}\t\tMoves: {mc}\t\tTime: {}ms", stop.as_millis());
-}
-
-fn do_perf_counter() {
-    let depth = 4;
-    let b = Board::new();
-    let mt = MoveTables::new();
-    let mut counter = Counter::new();
-    // println!("{}", movegen::gen_all_moves(&b, &mt).len());
-    perft_debug(&b, depth, &mt, None, &mut counter);
-    dbg!(counter);
 }

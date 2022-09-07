@@ -1,13 +1,16 @@
 #![allow(unused)]
-
+#![allow(non_upper_case_globals)]
 use std::sync::Arc;
+use lazy_static::lazy_static;
 use rand::prelude::*;
 use crate::board::Board;
 use crate::move_info::{BISHOP_MAGIC, BISHOP_MASK, FA, FB, FG, FH, R1, R3, R6, R8, RAYS, ROOK_MAGIC, ROOK_MASK, SQUARES};
 use crate::moves::Move;
 use crate::print_bb;
 
-pub static mut MT: Option<MoveTables> = None;
+lazy_static!{
+    pub static ref mt: MoveTables = MoveTables::new();
+}
 
 
 pub const R_BIT: i32 = 12;

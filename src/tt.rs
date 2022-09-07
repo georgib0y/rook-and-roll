@@ -1,6 +1,7 @@
 use std::borrow::BorrowMut;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::RwLock;
+use lazy_static::lazy_static;
 use rand::prelude::*;
 use rand::distributions;
 use rand::distributions::Standard;
@@ -16,6 +17,11 @@ const TT_IDX_MASK: u64 = 0xFFFFF;
 pub const SET_TT_FLAG: u8 = 0;
 pub const UNSET_TT_FLAG: u8 = 0;
 
+pub const ORDER: Ordering = Ordering::Release;
+
+lazy_static!{
+    pub static ref ZORB: Box<[u64]> = init_zorbist_array();
+}
 
 
 /*
@@ -41,7 +47,6 @@ AN idea to minimize this (could be a bad idea but it's MY idea at least):
 
 // sequential transposition table
 pub struct SeqTT {
-    pub zorb: Box<[u64]>,
     ttable: Box<[TTEntry]>,
     hit_count: usize,
     miss_count: usize
@@ -50,7 +55,6 @@ pub struct SeqTT {
 impl SeqTT {
     pub fn new() -> SeqTT {
         SeqTT {
-            zorb: init_zorbist_array(),
             ttable: (0..TTABLE_SIZE)
                 .map(|_| TTEntry::random_entry())
                 .collect(),
@@ -77,7 +81,6 @@ impl SeqTT {
 
 // parallel transposition table
 pub struct AtomicTT {
-    pub zorb: Box<[u64]>,
     ttable: Box<[AtomicTTEntry]>,
     hit_count: usize,
     miss_count: usize
@@ -86,7 +89,6 @@ pub struct AtomicTT {
 impl AtomicTT {
     pub fn new() -> AtomicTT {
         AtomicTT {
-            zorb: init_zorbist_array(),
             ttable: (0..TTABLE_SIZE)
                 .map(|_| AtomicTTEntry::random_entry())
                 .collect(),
@@ -99,17 +101,17 @@ impl AtomicTT {
         let entry = &self.ttable[(hash & TT_IDX_MASK) as usize];
 
         // TODO you could experiment with orderings
-        if entry.e_type.load(Ordering::Relaxed) == UNSET_TT_FLAG {
+        if entry.e_type.load(ORDER) == UNSET_TT_FLAG {
             None
         } else {
-            Some(entry.score.load(Ordering::Relaxed))
+            Some(entry.score.load(ORDER))
         }
     }
 
     pub fn insert(&self, hash: u64, score: i32, e_type: u8) {
-        self.ttable[(hash & TT_IDX_MASK) as usize].hash.store(hash, Ordering::Relaxed);
-        self.ttable[(hash & TT_IDX_MASK) as usize].score.store(score, Ordering::Relaxed);
-        self.ttable[(hash & TT_IDX_MASK) as usize].e_type.store(e_type, Ordering::Relaxed);
+        self.ttable[(hash & TT_IDX_MASK) as usize].hash.store(hash, ORDER);
+        self.ttable[(hash & TT_IDX_MASK) as usize].score.store(score, ORDER);
+        self.ttable[(hash & TT_IDX_MASK) as usize].e_type.store(e_type, ORDER);
     }
 
 }

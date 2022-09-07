@@ -4,7 +4,8 @@ use std::fmt;
 use crate::move_info::SQUARES;
 use crate::moves::Move;
 use crate::movegen::*;
-use crate::MoveTables;
+use crate::move_tables::mt;
+use crate::tt::ZORB;
 
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 2;
@@ -23,6 +24,7 @@ pub struct Board {
     pub castle_state: u8,
     pub ep: usize,
     pub halfmove: usize,
+    pub hash: u64
 }
 
 impl Board {
@@ -51,17 +53,22 @@ impl Board {
                 pieces[1] | pieces[3] | pieces[5] | pieces[7] | pieces[9] | pieces[11],
         ];
 
-        Board {
+        let mut board = Board {
             pieces,
             util,
             colour_to_move: 0,
             castle_state: 0b1111,
             ep: 64,
             halfmove: 0,
-        }
+            hash: 0
+        };
+
+        board.hash = gen_hash(board);
+
+        board
     }
 
-    pub fn new_fen(fen: &str, mt: &MoveTables) -> Board {
+    pub fn new_fen(fen: &str) -> Board {
         let mut b = Board::new();
         // clear the board
         b.pieces = [0;12];
@@ -169,11 +176,17 @@ impl Board {
         }
 
         b.halfmove = fen.get(4).unwrap_or(&"0").parse().unwrap();
-        
+
+        // regen the hash after everything is finished
+        b.hash = gen_hash(b);
+
         b
     }
 
-    pub fn copy_make(&self, m: &Move, mt: &MoveTables) -> Board {
+    // TODO debug hashing, dunno how to do that tho
+    // TODO also perf seems to drop a lot for not that many lines, could just be the zorb arr tho
+
+    pub fn copy_make(&self, m: &Move) -> Board {
         // copy board
         let mut b = *self;
 
@@ -184,46 +197,85 @@ impl Board {
         b.pieces[m.piece() as usize] ^= ft;
         b.util[b.colour_to_move] ^= ft;
         b.util[2] ^= ft;
+
+        // toggle ep file if there is one
+        if self.ep < 64 { b.hash ^= ZORB[773 + (b.ep % 8) as usize]; }
         b.ep = 64;
 
+        b.hash ^= ZORB[(m.piece() * 64 + m.from()) as usize];
+        b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize];
+
+        b.halfmove += 1;
+
         match m.move_type() {
-            QUIET => {}
-            DOUBLE => b.ep = (to - 8 + (b.colour_to_move as u32 * 16)) as usize,
+            QUIET =>  if m.piece() < 2 { b.halfmove = 0; },
+            DOUBLE => {
+                b.ep = (to - 8 + (b.colour_to_move as u32 * 16)) as usize;
+                b.hash ^= ZORB[773 + (b.ep % 8) as usize];
+                b.halfmove = 0;
+            },
             CAP => {
                 b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
                 b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];
                 b.util[2] ^= SQUARES[to as usize];
+
+                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];
+                b.halfmove = 0;
+
             }
             WKINGSIDE => {
                 b.pieces[4] ^= SQUARES[7] | SQUARES[5];
                 b.util[0] ^= SQUARES[7] | SQUARES[5];
                 b.util[2] ^= SQUARES[7] | SQUARES[5];
+
+                b.hash ^= ZORB[4*64+5]; // 4 * 64 + 7
+                b.hash ^= ZORB[4*64+5]; // 4 * 64 + 5
             }
             BKINGSIDE => {
                 b.pieces[5] ^= SQUARES[63] | SQUARES[61];
                 b.util[1] ^= SQUARES[63] | SQUARES[61];
                 b.util[2] ^= SQUARES[63] | SQUARES[61];
+
+                b.hash ^= ZORB[5*64+63];
+                b.hash ^= ZORB[5*64+61];
             }
             WQUEENSIDE => {
                 b.pieces[4] ^= SQUARES[0] | SQUARES[3];
                 b.util[0] ^= SQUARES[0] | SQUARES[3];
                 b.util[2] ^= SQUARES[0] | SQUARES[3];
+
+                b.hash ^= ZORB[4*64];
+                b.hash ^= ZORB[4*64+3];
             }
             BQUEENSIDE => {
                 b.pieces[5] ^= SQUARES[56] | SQUARES[59];
                 b.util[1] ^= SQUARES[56] | SQUARES[59];
                 b.util[2] ^= SQUARES[56] | SQUARES[59];
+
+                b.hash ^= ZORB[5*64+56];
+                b.hash ^= ZORB[5*64+59];
             }
             PROMO => {
                 b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
                 b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
+
+                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize];
+                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];
+
+                b.halfmove = 0;
             }
             N_PROMO_CAP => {
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];
-                b.util[2] ^= SQUARES[to as usize];
-                b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
-                b.pieces[2 + b.colour_to_move] ^= SQUARES[to as usize];
+                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];  // toggle cap piece
+                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];   // toggle cap piece on colour bb
+                b.util[2] ^= SQUARES[to as usize];  // re-toggle piece in all pieces bb
+                b.pieces[b.colour_to_move] ^= SQUARES[to as usize]; // toggle pawn off
+                b.pieces[2 + b.colour_to_move] ^= SQUARES[to as usize]; // toggle promo on
+
+                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
+                b.hash ^= ZORB[(2 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
+                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
+
+                b.halfmove = 0;
             }
             R_PROMO_CAP => {
                 b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
@@ -231,6 +283,12 @@ impl Board {
                 b.util[2] ^= SQUARES[to as usize];
                 b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
                 b.pieces[4 + b.colour_to_move] ^= SQUARES[to as usize];
+
+                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
+                b.hash ^= ZORB[(4 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
+                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
+
+                b.halfmove = 0;
             }
             B_PROMO_CAP => {
                 b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
@@ -238,6 +296,12 @@ impl Board {
                 b.util[2] ^= SQUARES[to as usize];
                 b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
                 b.pieces[6 + b.colour_to_move] ^= SQUARES[to as usize];
+
+                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
+                b.hash ^= ZORB[(6 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
+                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
+
+                b.halfmove = 0;
             }
             Q_PROMO_CAP => {
                 b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
@@ -245,35 +309,42 @@ impl Board {
                 b.util[2] ^= SQUARES[to as usize];
                 b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
                 b.pieces[8 + b.colour_to_move] ^= SQUARES[to as usize];
+
+                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
+                b.hash ^= ZORB[(8 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
+                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
+
+                b.halfmove = 0;
             }
             EP => {
                 b.pieces[1 - b.colour_to_move] ^= SQUARES[to as usize - 8 + (b.colour_to_move * 16)];
                 b.util[1 - b.colour_to_move] ^= SQUARES[to as usize - 8 + (b.colour_to_move * 16)];
                 b.util[2] ^= SQUARES[to as usize - 8 + (b.colour_to_move * 16)];
+                b.hash ^= ZORB[m.xpiece() as usize * 64 + (m.to() as usize - 8 + (b.colour_to_move * 16))];
+                b.halfmove = 0;
             }
             _ => panic!("Move type: {}, outside of range!", m.move_type()),
         }
 
-        if from as usize == 7 || to as usize == 7 {
+        if (from as usize == 7 || to as usize == 7 || m.piece() == 10) && b.castle_state & 0b1000 > 0 {
             b.castle_state &= 0b0111;
+            b.hash ^= ZORB[769];
         }
-        if from as usize == 0 || to as usize == 0 {
+        if (from as usize == 0 || to as usize == 0 || m.piece() == 10) && b.castle_state & 0b100 > 0 {
             b.castle_state &= 0b1011;
+            b.hash ^= ZORB[770];
         }
-        if from as usize == 63 || to as usize == 63 {
+        if (from as usize == 63 || to as usize == 63 || m.piece() == 11) && b.castle_state & 0b10 > 0 {
             b.castle_state &= 0b1101;
+            b.hash ^= ZORB[771];
         }
-        if from as usize == 56 || to as usize == 56 {
+        if (from as usize == 56 || to as usize == 56 || m.piece() == 11) && b.castle_state & 0b1 > 0 {
             b.castle_state &= 0b1110;
-        }
-        if m.piece() as usize == 10 {
-            b.castle_state &= 0b11;
-        }
-        if m.piece() as usize == 11 {
-            b.castle_state &= 0b1100;
+            b.hash ^= ZORB[772];
         }
 
         b.colour_to_move ^= 1;
+        b.hash ^= ZORB[768];
         
         b
     }
@@ -333,6 +404,30 @@ impl fmt::Display for Board {
         out.push_str("\n     A B C D E F G H\n");
         write!(f, "{}", out)
     }
+}
+
+fn gen_hash(board: Board) -> u64 {
+    let mut hash = 0;
+
+    for piece in 0..12 {
+        for sq in 0..64 {
+            if ( board.pieces[piece] & SQUARES[sq] ) > 0 {
+                hash ^= ZORB[piece*64 + sq];
+            }
+        }
+    }
+
+    // if black to move toggle zorb
+    if board.colour_to_move == 1 { hash ^= ZORB[768]; }
+
+    if (board.castle_state & 0b1000) == 8{ hash ^= ZORB[769]; }
+    if (board.castle_state & 0b100)  == 4 { hash ^= ZORB[770]; }
+    if (board.castle_state & 0b10)   == 2 { hash ^= ZORB[771]; }
+    if (board.castle_state & 0b1)    == 1 { hash ^= ZORB[772]; }
+
+    if board.ep < 64 { hash ^= ZORB[773+(board.ep - (board.ep / 8)) as usize]; }
+
+    hash
 }
 
 pub fn print_bb(bb: u64) {
