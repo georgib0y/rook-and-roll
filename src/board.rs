@@ -5,7 +5,7 @@ use crate::eval::{gen_mat_value, MAT_SCORES};
 use crate::move_info::SQUARES;
 use crate::moves::Move;
 use crate::movegen::*;
-use crate::tt::ZORB;
+use crate::zorbist::ZORB;
 
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 2;
@@ -204,11 +204,11 @@ impl Board {
         b.util[2] ^= ft;
 
         // toggle ep file if there is one
-        if self.ep < 64 { b.hash ^= ZORB[773 + (b.ep % 8) as usize]; }
+        if self.ep < 64 { b.hash ^= ZORB.ep_file(b.ep); }
         b.ep = 64;
 
-        b.hash ^= ZORB[piece*64 + from];
-        b.hash ^= ZORB[piece*64 + to];
+        b.hash ^= ZORB.piece(piece, from);
+        b.hash ^= ZORB.piece(piece, to);
         b.halfmove += 1;
 
         match move_type {
@@ -216,7 +216,7 @@ impl Board {
             QUIET =>  b.halfmove *= (piece > 1) as usize,
             DOUBLE => {
                 b.ep = to - 8 + (b.colour_to_move * 16);
-                b.hash ^= ZORB[773 + (b.ep % 8) as usize];
+                b.hash ^= ZORB.ep_file(b.ep);
                 b.halfmove = 0;
             },
             CAP => {
@@ -225,7 +225,7 @@ impl Board {
                 b.util[2] ^= SQUARES[to];
 
                 b.mat_value -= MAT_SCORES[xpiece];
-                b.hash ^= ZORB[xpiece*64 + to];
+                b.hash ^= ZORB.piece(xpiece, to);
                 b.halfmove = 0;
 
             }
@@ -234,39 +234,40 @@ impl Board {
                 b.util[0] ^= SQUARES[7] | SQUARES[5];
                 b.util[2] ^= SQUARES[7] | SQUARES[5];
 
-                b.hash ^= ZORB[4*64+5]; // 4 * 64 + 7
-                b.hash ^= ZORB[4*64+5]; // 4 * 64 + 5
+                b.hash ^= ZORB.piece(4,7);
+                b.hash ^= ZORB.piece(4,5);
             }
             BKINGSIDE => {
                 b.pieces[5] ^= SQUARES[63] | SQUARES[61];
                 b.util[1] ^= SQUARES[63] | SQUARES[61];
                 b.util[2] ^= SQUARES[63] | SQUARES[61];
 
-                b.hash ^= ZORB[5*64+63];
-                b.hash ^= ZORB[5*64+61];
+                b.hash ^= ZORB.piece(5,63);
+                b.hash ^= ZORB.piece(5,61);
             }
             WQUEENSIDE => {
                 b.pieces[4] ^= SQUARES[0] | SQUARES[3];
                 b.util[0] ^= SQUARES[0] | SQUARES[3];
                 b.util[2] ^= SQUARES[0] | SQUARES[3];
 
-                b.hash ^= ZORB[4*64];
-                b.hash ^= ZORB[4*64+3];
+                b.hash ^= ZORB.piece(4,0);
+                b.hash ^= ZORB.piece(4,3);
             }
             BQUEENSIDE => {
                 b.pieces[5] ^= SQUARES[56] | SQUARES[59];
                 b.util[1] ^= SQUARES[56] | SQUARES[59];
                 b.util[2] ^= SQUARES[56] | SQUARES[59];
 
-                b.hash ^= ZORB[5*64+56];
-                b.hash ^= ZORB[5*64+59];
+                b.hash ^= ZORB.piece(5,56);
+                b.hash ^= ZORB.piece(5,59);
             }
             PROMO => {
                 b.pieces[b.colour_to_move] ^= SQUARES[to];
                 b.pieces[xpiece] ^= SQUARES[to];
 
-                b.hash ^= ZORB[piece*64 + to];
-                b.hash ^= ZORB[xpiece*64 + to];
+
+                b.hash ^= ZORB.piece(piece, to);
+                b.hash ^= ZORB.piece(xpiece, to);
 
                 b.mat_value += MAT_SCORES[xpiece];
                 b.halfmove = 0;
@@ -286,9 +287,9 @@ impl Board {
                 // toggle promo
                 b.pieces[promo_piece] ^= SQUARES[to];
 
-                b.hash ^= ZORB[piece*64 + to];
-                b.hash ^= ZORB[promo_piece*64 + to];
-                b.hash ^= ZORB[xpiece*64 + to];
+                b.hash ^= ZORB.piece(piece, to);
+                b.hash ^= ZORB.piece(promo_piece, to);
+                b.hash ^= ZORB.piece(xpiece, to);
 
                 // update mat value (the promo piece - the captured piece and the pre-promoted piece)
                 b.mat_value += MAT_SCORES[promo_piece] - MAT_SCORES[xpiece] - MAT_SCORES[piece];
@@ -298,7 +299,7 @@ impl Board {
                 b.pieces[b.colour_to_move^1] ^= SQUARES[to - 8 + (b.colour_to_move * 16)];
                 b.util[b.colour_to_move^1] ^= SQUARES[to - 8 + (b.colour_to_move * 16)];
                 b.util[2] ^= SQUARES[to - 8 + (b.colour_to_move * 16)];
-                b.hash ^= ZORB[xpiece * 64 + (to - 8 + (b.colour_to_move * 16))];
+                b.hash ^= ZORB.piece(xpiece, to - 8 + (b.colour_to_move * 16));
 
                 b.mat_value -= MAT_SCORES[xpiece];
                 b.halfmove = 0;
@@ -310,28 +311,28 @@ impl Board {
             10 => {
                 if (from == 7 || to == 7) && b.castle_state & 0b1000 > 0 {
                     b.castle_state &= 0b0111;
-                    b.hash ^= ZORB[769];
+                    b.hash ^= ZORB.castle_rights(0);
                 }
                 if (from == 0 || to == 0) && b.castle_state & 0b100 > 0 {
                     b.castle_state &= 0b1011;
-                    b.hash ^= ZORB[770];
+                    b.hash ^= ZORB.castle_rights(1);
                 }
             }
             11 => {
                 if (from == 63 || to == 63) && b.castle_state & 0b10 > 0 {
                     b.castle_state &= 0b1101;
-                    b.hash ^= ZORB[771];
+                    b.hash ^= ZORB.castle_rights(2);
                 }
                 if (from == 56 || to == 56) && b.castle_state & 0b1 > 0 {
                     b.castle_state &= 0b1110;
-                    b.hash ^= ZORB[772];
+                    b.hash ^= ZORB.castle_rights(3);
                 }
             }
             _ => {}
         }
 
         b.colour_to_move ^= 1;
-        b.hash ^= ZORB[768];
+        b.hash ^= ZORB.colour();
         
         b
     }
@@ -399,20 +400,20 @@ fn gen_hash(board: Board) -> u64 {
     for piece in 0..12 {
         for sq in 0..64 {
             if ( board.pieces[piece] & SQUARES[sq] ) > 0 {
-                hash ^= ZORB[piece*64 + sq];
+                hash ^= ZORB.piece(piece, sq);
             }
         }
     }
 
     // if black to move toggle zorb
-    if board.colour_to_move == 1 { hash ^= ZORB[768]; }
+    if board.colour_to_move == 1 { hash ^= ZORB.colour(); }
 
-    if (board.castle_state & 0b1000) == 8{ hash ^= ZORB[769]; }
-    if (board.castle_state & 0b100)  == 4 { hash ^= ZORB[770]; }
-    if (board.castle_state & 0b10)   == 2 { hash ^= ZORB[771]; }
-    if (board.castle_state & 0b1)    == 1 { hash ^= ZORB[772]; }
+    if (board.castle_state & 0b1000) == 8 { hash ^= ZORB.castle_rights(0); }
+    if (board.castle_state & 0b100)  == 4 { hash ^= ZORB.castle_rights(1); }
+    if (board.castle_state & 0b10)   == 2 { hash ^= ZORB.castle_rights(2); }
+    if (board.castle_state & 0b1)    == 1 { hash ^= ZORB.castle_rights(3); }
 
-    if board.ep < 64 { hash ^= ZORB[773+(board.ep - (board.ep / 8)) as usize]; }
+    if board.ep < 64 { hash ^= ZORB.ep_file(board.ep); }
 
     hash
 }

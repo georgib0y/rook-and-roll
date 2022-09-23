@@ -20,10 +20,6 @@ pub const UNSET_TT_FLAG: u8 = 0;
 
 pub const ORDER: Ordering = Ordering::Release;
 
-lazy_static!{
-    pub static ref ZORB: Box<[u64]> = init_zorbist_array();
-}
-
 
 /*
 TODO
@@ -170,22 +166,4 @@ impl AtomicTTEntry {
             e_type: AtomicU8::new(rand::thread_rng().gen_range(0..2))
         }
     }
-}
-
-// zorbist array indexing:
-// 0-767: piece positions, 768: colour, 769-772: castle rights, 773-780: file of ep square
-fn init_zorbist_array() -> Box<[u64]> {
-    let mut zorbist_array: [u64; 781] = [0; 781];
-
-    let mut z_hash = 0u64;
-    // may be a good seed or may not be (could try flipping the reverse around if not)
-    let mut prng = ChaCha20Rng::seed_from_u64(72520922902527);
-
-    for z in &mut zorbist_array  {
-        *z = prng.gen::<u64>();
-        z_hash ^= *z;
-    }
-
-
-    Box::new(zorbist_array)
 }

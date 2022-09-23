@@ -1,6 +1,4 @@
 #![allow(unused)]
-extern crate core;
-
 use std::env;
 use std::env::args;
 use std::fs::File;
@@ -36,6 +34,7 @@ mod search;
 mod eval;
 mod uci;
 mod tt;
+mod zorbist;
 
 
 fn main() {
