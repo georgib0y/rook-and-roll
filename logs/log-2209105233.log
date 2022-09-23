@@ -1,0 +1,21 @@
+00:52:35 [INFO] position fen rnbqkbnr/pp1ppppp/8/8/4P3/2Pp4/PP3PPP/RNBQKBNR w KQkq - 0 4 moves d1d3 d8b6 c1f4 b6f2 e1f2 g8f6 d3d4 f6g4 f2e1 b8c6 b1d2 c6d4 a1d1 d4c2 e1e2 e7e5 d1c1 e5f4 c1c2 g4f2 e2f2 f8c5 f2f3 g7g5 g1e2 g5g4 f3g4 d7d6 g4f4 c5e3 f4e3 c8g4 d2f3 a8d8 c2d2 e8g8 e3f4 g4e6 f4e3 e6a2 e2f4 f7f5 f1c4 a2c4 f3d4 d8e8 e3f2 e8e4 h1e1 e4f4 f2g3 f4g4 g3h3 g4h4 h3h4 c4f7 d4f5
+
+00:52:37 [INFO] go
+
+00:52:37 [INFO] info string starting search
+00:52:37 [INFO] info depth 1
+00:52:37 [INFO] info depth 2
+00:52:37 [INFO] info depth 3
+00:52:37 [INFO] info depth 4
+00:52:37 [INFO] info depth 5
+00:52:37 [INFO] bestmove g8f8
+00:52:44 [INFO] print board
+
+00:53:45 [INFO] position fen rnbqkbnr/pp1ppppp/8/8/4P3/2Pp4/PP3PPP/RNBQKBNR w KQkq - 0 4 moves d1d3 d8b6 c1f4 b6f2 e1f2 g8f6 d3d4 f6g4 f2e1 b8c6 b1d2 c6d4 a1d1 d4c2 e1e2 e7e5 d1c1 e5f4 c1c2 g4f2 e2f2 f8c5 f2f3 g7g5 g1e2 g5g4 f3g4 d7d6 g4f4 c5e3 f4e3 c8g4 d2f3 a8d8 c2d2 e8g8 e3f4
+
+00:53:50 [INFO] print board
+
+00:54:05 [INFO] position fen rnbqkbnr/pp1ppppp/8/8/4P3/2Pp4/PP3PPP/RNBQKBNR w KQkq - 0 4 moves d1d3 d8b6 c1f4 b6f2 e1f2 g8f6 d3d4 f6g4 f2e1 b8c6 b1d2 c6d4 a1d1 d4c2 e1e2 e7e5 d1c1 e5f4 c1c2 g4f2 e2f2 f8c5 f2f3 g7g5 g1e2 g5g4 f3g4 d7d6 g4f4 c5e3 f4e3 c8g4 d2f3 a8d8 c2d2
+
+00:54:08 [INFO] print board
+

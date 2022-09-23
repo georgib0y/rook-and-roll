@@ -1,10 +1,10 @@
 #![allow(unused)]
 
 use std::fmt;
+use crate::eval::{gen_mat_value, MAT_SCORES};
 use crate::move_info::SQUARES;
 use crate::moves::Move;
 use crate::movegen::*;
-use crate::move_tables::mt;
 use crate::tt::ZORB;
 
 pub const PAWN: usize = 0;
@@ -24,7 +24,8 @@ pub struct Board {
     pub castle_state: u8,
     pub ep: usize,
     pub halfmove: usize,
-    pub hash: u64
+    pub hash: u64,
+    pub mat_value: i32
 }
 
 impl Board {
@@ -60,10 +61,12 @@ impl Board {
             castle_state: 0b1111,
             ep: 64,
             halfmove: 0,
-            hash: 0
+            hash: 0,
+            mat_value: 0
         };
 
         board.hash = gen_hash(board);
+        board.mat_value = gen_mat_value(board);
 
         board
     }
@@ -179,6 +182,7 @@ impl Board {
 
         // regen the hash after everything is finished
         b.hash = gen_hash(b);
+        b.mat_value = gen_mat_value(b);
 
         b
     }
@@ -190,11 +194,12 @@ impl Board {
         // copy board
         let mut b = *self;
 
+        // get info from board
+        let (from, to, piece, xpiece, move_type) = m.all();
+
         // flip from and to bits on relevant boards
-        let from = m.from();
-        let to = m.to();
-        let ft = SQUARES[from as usize] | SQUARES[to as usize];
-        b.pieces[m.piece() as usize] ^= ft;
+        let ft = SQUARES[from] | SQUARES[to];
+        b.pieces[piece] ^= ft;
         b.util[b.colour_to_move] ^= ft;
         b.util[2] ^= ft;
 
@@ -202,24 +207,25 @@ impl Board {
         if self.ep < 64 { b.hash ^= ZORB[773 + (b.ep % 8) as usize]; }
         b.ep = 64;
 
-        b.hash ^= ZORB[(m.piece() * 64 + m.from()) as usize];
-        b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize];
-
+        b.hash ^= ZORB[piece*64 + from];
+        b.hash ^= ZORB[piece*64 + to];
         b.halfmove += 1;
 
-        match m.move_type() {
-            QUIET =>  if m.piece() < 2 { b.halfmove = 0; },
+        match move_type {
+            // (piece > 1) as usize == 1 if piece not pawn, so halfmove*1, if pawn halfmove*0 == 0
+            QUIET =>  b.halfmove *= (piece > 1) as usize,
             DOUBLE => {
-                b.ep = (to - 8 + (b.colour_to_move as u32 * 16)) as usize;
+                b.ep = to - 8 + (b.colour_to_move * 16);
                 b.hash ^= ZORB[773 + (b.ep % 8) as usize];
                 b.halfmove = 0;
             },
             CAP => {
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];
-                b.util[2] ^= SQUARES[to as usize];
+                b.pieces[xpiece] ^= SQUARES[to];
+                b.util[b.colour_to_move^1] ^= SQUARES[to];
+                b.util[2] ^= SQUARES[to];
 
-                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];
+                b.mat_value -= MAT_SCORES[xpiece];
+                b.hash ^= ZORB[xpiece*64 + to];
                 b.halfmove = 0;
 
             }
@@ -256,91 +262,72 @@ impl Board {
                 b.hash ^= ZORB[5*64+59];
             }
             PROMO => {
-                b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
+                b.pieces[b.colour_to_move] ^= SQUARES[to];
+                b.pieces[xpiece] ^= SQUARES[to];
 
-                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize];
-                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];
+                b.hash ^= ZORB[piece*64 + to];
+                b.hash ^= ZORB[xpiece*64 + to];
 
+                b.mat_value += MAT_SCORES[xpiece];
                 b.halfmove = 0;
             }
-            N_PROMO_CAP => {
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];  // toggle cap piece
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];   // toggle cap piece on colour bb
-                b.util[2] ^= SQUARES[to as usize];  // re-toggle piece in all pieces bb
-                b.pieces[b.colour_to_move] ^= SQUARES[to as usize]; // toggle pawn off
-                b.pieces[2 + b.colour_to_move] ^= SQUARES[to as usize]; // toggle promo on
+            N_PROMO_CAP | R_PROMO_CAP | B_PROMO_CAP | Q_PROMO_CAP => {
+                // N_PROMO_CAP (8) - 7 = [1], [1] * 2 + b.colour_to_move == 2 or 3 (knight idx)
+                // R_PROMO_CAP (9) - 7 = [2], [2] * 2 + b.colour_to_move == 4 or 5 (rook idx) etc
+                let promo_piece = (move_type as usize-7)*2 + b.colour_to_move;
 
-                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
-                b.hash ^= ZORB[(2 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
-                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
+                // toggle captured piece
+                b.pieces[xpiece] ^= SQUARES[to];
+                b.util[b.colour_to_move^1] ^= SQUARES[to];
+                // retoggle piece (as its been replaced by the capture-er)
+                b.util[2] ^= SQUARES[to];
+                // toggle pawn off
+                b.pieces[b.colour_to_move] ^= SQUARES[to];
+                // toggle promo
+                b.pieces[promo_piece] ^= SQUARES[to];
 
-                b.halfmove = 0;
-            }
-            R_PROMO_CAP => {
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];
-                b.util[2] ^= SQUARES[to as usize];
-                b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
-                b.pieces[4 + b.colour_to_move] ^= SQUARES[to as usize];
+                b.hash ^= ZORB[piece*64 + to];
+                b.hash ^= ZORB[promo_piece*64 + to];
+                b.hash ^= ZORB[xpiece*64 + to];
 
-                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
-                b.hash ^= ZORB[(4 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
-                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
-
-                b.halfmove = 0;
-            }
-            B_PROMO_CAP => {
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];
-                b.util[2] ^= SQUARES[to as usize];
-                b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
-                b.pieces[6 + b.colour_to_move] ^= SQUARES[to as usize];
-
-                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
-                b.hash ^= ZORB[(6 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
-                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
-
-                b.halfmove = 0;
-            }
-            Q_PROMO_CAP => {
-                b.pieces[m.xpiece() as usize] ^= SQUARES[to as usize];
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize];
-                b.util[2] ^= SQUARES[to as usize];
-                b.pieces[b.colour_to_move] ^= SQUARES[to as usize];
-                b.pieces[8 + b.colour_to_move] ^= SQUARES[to as usize];
-
-                b.hash ^= ZORB[(m.piece() * 64 + m.to()) as usize]; // toggle pawn in hash
-                b.hash ^= ZORB[(8 + b.colour_to_move) * 64 + m.to() as usize]; // toggle promo in hash
-                b.hash ^= ZORB[(m.xpiece() * 64 + m.to()) as usize];    // toggle cap in hash
-
+                // update mat value (the promo piece - the captured piece and the pre-promoted piece)
+                b.mat_value += MAT_SCORES[promo_piece] - MAT_SCORES[xpiece] - MAT_SCORES[piece];
                 b.halfmove = 0;
             }
             EP => {
-                b.pieces[1 - b.colour_to_move] ^= SQUARES[to as usize - 8 + (b.colour_to_move * 16)];
-                b.util[1 - b.colour_to_move] ^= SQUARES[to as usize - 8 + (b.colour_to_move * 16)];
-                b.util[2] ^= SQUARES[to as usize - 8 + (b.colour_to_move * 16)];
-                b.hash ^= ZORB[m.xpiece() as usize * 64 + (m.to() as usize - 8 + (b.colour_to_move * 16))];
+                b.pieces[b.colour_to_move^1] ^= SQUARES[to - 8 + (b.colour_to_move * 16)];
+                b.util[b.colour_to_move^1] ^= SQUARES[to - 8 + (b.colour_to_move * 16)];
+                b.util[2] ^= SQUARES[to - 8 + (b.colour_to_move * 16)];
+                b.hash ^= ZORB[xpiece * 64 + (to - 8 + (b.colour_to_move * 16))];
+
+                b.mat_value -= MAT_SCORES[xpiece];
                 b.halfmove = 0;
             }
-            _ => panic!("Move type: {}, outside of range!", m.move_type()),
+            _ => panic!("Move type: {move_type}, outside of range!"),
         }
 
-        if (from as usize == 7 || to as usize == 7 || m.piece() == 10) && b.castle_state & 0b1000 > 0 {
-            b.castle_state &= 0b0111;
-            b.hash ^= ZORB[769];
-        }
-        if (from as usize == 0 || to as usize == 0 || m.piece() == 10) && b.castle_state & 0b100 > 0 {
-            b.castle_state &= 0b1011;
-            b.hash ^= ZORB[770];
-        }
-        if (from as usize == 63 || to as usize == 63 || m.piece() == 11) && b.castle_state & 0b10 > 0 {
-            b.castle_state &= 0b1101;
-            b.hash ^= ZORB[771];
-        }
-        if (from as usize == 56 || to as usize == 56 || m.piece() == 11) && b.castle_state & 0b1 > 0 {
-            b.castle_state &= 0b1110;
-            b.hash ^= ZORB[772];
+        match piece {
+            10 => {
+                if (from == 7 || to == 7) && b.castle_state & 0b1000 > 0 {
+                    b.castle_state &= 0b0111;
+                    b.hash ^= ZORB[769];
+                }
+                if (from == 0 || to == 0) && b.castle_state & 0b100 > 0 {
+                    b.castle_state &= 0b1011;
+                    b.hash ^= ZORB[770];
+                }
+            }
+            11 => {
+                if (from == 63 || to == 63) && b.castle_state & 0b10 > 0 {
+                    b.castle_state &= 0b1101;
+                    b.hash ^= ZORB[771];
+                }
+                if (from == 56 || to == 56) && b.castle_state & 0b1 > 0 {
+                    b.castle_state &= 0b1110;
+                    b.hash ^= ZORB[772];
+                }
+            }
+            _ => {}
         }
 
         b.colour_to_move ^= 1;

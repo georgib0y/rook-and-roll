@@ -1,0 +1,21 @@
+00:47:05 [INFO] uci
+
+00:47:05 [INFO] id name rustinator2
+id author george
+uciok
+00:47:05 [INFO] isready
+
+00:47:05 [INFO] readyok
+00:47:05 [INFO] ucinewgame
+
+00:47:11 [INFO] position fen rnbqkbnr/pp1ppppp/8/8/3pP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3 moves f2f3
+
+00:47:11 [INFO] go wtime 297271 winc 0 btime 299712 binc 0
+
+00:47:11 [INFO] info string starting search
+00:47:11 [INFO] info depth 1
+00:47:11 [INFO] info depth 2
+00:47:11 [INFO] info depth 3
+00:47:11 [INFO] info depth 4
+00:47:11 [INFO] info depth 5
+00:47:11 [ERROR] Did not find a best move

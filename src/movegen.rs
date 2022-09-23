@@ -3,7 +3,7 @@ use crate::board::{BISHOP, Board, KING, KNIGHT, PAWN, QUEEN, ROOK};
 use crate::move_info::{FA, FH, R1, R2, R3, R6, R7, R8, SQUARES};
 use crate::moves::{Move};
 use crate::{MoveTables, print_bb};
-use crate::move_tables::mt;
+use crate::move_tables::MT;
 
 pub const QUIET: u32 = 0;
 pub const DOUBLE: u32 = 1;
@@ -54,6 +54,43 @@ pub fn gen_all_moves(b: &Board) -> Vec<Move> {
     moves
 }
 
+pub fn gen_attacks(b: &Board) -> Vec<Move> {
+    let mut moves = Vec::with_capacity(120);
+
+    if b.colour_to_move == 0 {
+        gen_wpawn_attack(&mut moves, b.pieces[0], b, b.util[1]);
+    } else {
+        gen_bpawn_attack(&mut moves, b.pieces[1], b, b.util[0]);
+    }
+
+    gen_knight_attacks(&mut moves, b.pieces[2+b.colour_to_move], b, b.util[1-b.colour_to_move]);
+    gen_rook_attacks(&mut moves, b.pieces[4+b.colour_to_move], b, b.util[1-b.colour_to_move]);
+    gen_bishop_attacks(&mut moves, b.pieces[6+b.colour_to_move], b, b.util[1-b.colour_to_move]);
+    gen_queen_attacks(&mut moves, b.pieces[8+b.colour_to_move], b, b.util[1-b.colour_to_move]);
+    gen_king_attack(&mut moves, b);
+
+    moves
+}
+
+pub fn gen_quiet(b: &Board) -> Vec<Move> {
+    let mut moves = Vec::with_capacity(120);
+
+    if b.colour_to_move == 0 {
+        gen_wpawn_quiet(&mut moves, b.pieces[0], b.util[2], b.util[2]);
+    } else {
+        gen_bpawn_quiet(&mut moves, b.pieces[1], b.util[2], b.util[2]);
+    }
+
+    gen_knight_quiet(&mut moves, b.pieces[2+b.colour_to_move], b, b.util[2]);
+    gen_rook_quiet(&mut moves, b.pieces[4+b.colour_to_move], b, b.util[2]);
+    gen_bishop_quiet(&mut moves, b.pieces[6+b.colour_to_move], b, b.util[2]);
+    gen_queen_quiet(&mut moves, b.pieces[8+b.colour_to_move], b, b.util[2]);
+    gen_king_quiet(&mut moves, b);
+    gen_king_castle(&mut moves, b);
+
+    moves
+}
+
 // gen all legal moves
 pub fn gen_check_moves(b: &Board) -> Vec<Move> {
     let mut moves = Vec::with_capacity(75);
@@ -63,22 +100,22 @@ pub fn gen_check_moves(b: &Board) -> Vec<Move> {
     let attackers = get_attackers(b, b.colour_to_move^1, ksq);
 
     // if double check then can return just the king moves
-    if attackers.count_ones() == 2 {
+    if attackers.count_ones() >= 2 {
         return moves;
     }
 
     // get pins
     let mut pinned: u64 = 0;
-    let pinners = mt.get_rook_xray(b.util[2], b.util[b.colour_to_move], ksq) |
-        mt.get_bishop_xray(b.util[2], b.util[b.colour_to_move], ksq);
+    let pinners = MT.get_rook_xray(b.util[2], b.util[b.colour_to_move], ksq) |
+        MT.get_bishop_xray(b.util[2], b.util[b.colour_to_move], ksq);
 
     // for every opp sliding piece gen moves and add any point where they intersect with the kings
     let mut rq = b.pieces[ROOK+(b.colour_to_move^1)] | b.pieces[QUEEN+(b.colour_to_move^1)];
     rq &= pinners;
     while rq > 0 {
         let rq_sq = rq.trailing_zeros() as usize;
-        pinned |= (mt.rays[1][ksq] & mt.rays[5][rq_sq]) | (mt.rays[3][ksq] & mt.rays[7][rq_sq]) |
-            (mt.rays[5][ksq] & mt.rays[1][rq_sq]) | (mt.rays[7][ksq] & mt.rays[3][rq_sq]);
+        pinned |= (MT.rays[1][ksq] & MT.rays[5][rq_sq]) | (MT.rays[3][ksq] & MT.rays[7][rq_sq]) |
+            (MT.rays[5][ksq] & MT.rays[1][rq_sq]) | (MT.rays[7][ksq] & MT.rays[3][rq_sq]);
         rq &= rq - 1;
     }
 
@@ -86,8 +123,8 @@ pub fn gen_check_moves(b: &Board) -> Vec<Move> {
     bq &= pinners;
     while bq > 0 {
         let bq_sq = bq.trailing_zeros() as usize;
-        pinned |= (mt.rays[0][ksq] & mt.rays[4][bq_sq]) | (mt.rays[2][ksq] & mt.rays[6][bq_sq]) |
-            (mt.rays[4][ksq] & mt.rays[0][bq_sq]) | (mt.rays[6][ksq] & mt.rays[2][bq_sq]);
+        pinned |= (MT.rays[0][ksq] & MT.rays[4][bq_sq]) | (MT.rays[2][ksq] & MT.rays[6][bq_sq]) |
+            (MT.rays[4][ksq] & MT.rays[0][bq_sq]) | (MT.rays[6][ksq] & MT.rays[2][bq_sq]);
         bq &= bq - 1;
     }
 
@@ -115,7 +152,7 @@ pub fn gen_check_moves(b: &Board) -> Vec<Move> {
         let dir = get_pos_ray_dir(lower,higher);
 
         // inverted to keep compatibility with b.util[2]
-        let inbetween = !(mt.rays[dir][lower as usize] & (SQUARES[higher as usize] - 1));
+        let inbetween = !(MT.rays[dir][lower as usize] & (SQUARES[higher as usize] - 1));
 
         if b.colour_to_move == 0 {
             gen_wpawn_quiet(&mut moves, b.pieces[b.colour_to_move] & !pinned, inbetween, b.util[2]);
@@ -333,7 +370,7 @@ fn gen_bpawn_attack(moves: &mut Vec<Move>, pawns: u64, b: &Board, opp: u64) {
 fn gen_knight_quiet(moves: &mut Vec<Move>, mut knights: u64, b: &Board, occ: u64) {
     while knights > 0 {
         let from = knights.trailing_zeros();
-        let mut quiet = mt.knight_moves[from as usize] & !occ;
+        let mut quiet = MT.knight_moves[from as usize] & !occ;
         while quiet > 0 {
             moves.push(Move::new(from, quiet.trailing_zeros(),
                                  2+b.colour_to_move as u32, 0, QUIET)
@@ -347,7 +384,7 @@ fn gen_knight_quiet(moves: &mut Vec<Move>, mut knights: u64, b: &Board, occ: u64
 fn gen_knight_attacks(moves: &mut Vec<Move>, mut knights: u64, b: &Board, opp: u64) {
     while knights > 0 {
         let from = knights.trailing_zeros();
-        let mut attacks = mt.knight_moves[from as usize] & opp;
+        let mut attacks = MT.knight_moves[from as usize] & opp;
         while attacks > 0 {
             let to = attacks.trailing_zeros();
             moves.push(Move::new(from, to, 2+b.colour_to_move as u32,
@@ -362,7 +399,7 @@ fn gen_knight_attacks(moves: &mut Vec<Move>, mut knights: u64, b: &Board, opp: u
 fn gen_rook_quiet(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, occ: u64) {
     while rooks > 0 {
         let from = rooks.trailing_zeros();
-        let mut quiet = mt.get_rook_moves(
+        let mut quiet = MT.get_rook_moves(
             b.util[2],
             rooks.trailing_zeros() as usize
         ) & !occ;
@@ -383,7 +420,7 @@ fn gen_rook_quiet(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, occ: u64) {
 fn gen_rook_attacks(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, opp: u64) {
     while rooks > 0 {
         let from = rooks.trailing_zeros();
-        let mut attack = mt.get_rook_moves(
+        let mut attack = MT.get_rook_moves(
             b.util[2],
             rooks.trailing_zeros() as usize
         ) & opp;
@@ -410,7 +447,7 @@ fn gen_rook_attacks(moves: &mut Vec<Move>, mut rooks: u64, b: &Board, opp: u64) 
 fn gen_bishop_quiet(moves: &mut Vec<Move>, mut bishops: u64, b: &Board, occ: u64) {
     while bishops > 0 {
         let from = bishops.trailing_zeros();
-        let mut quiet = mt.get_bishop_moves(
+        let mut quiet = MT.get_bishop_moves(
             b.util[2],
             bishops.trailing_zeros() as usize
         ) & !occ;
@@ -429,7 +466,7 @@ fn gen_bishop_quiet(moves: &mut Vec<Move>, mut bishops: u64, b: &Board, occ: u64
 fn gen_bishop_attacks(moves: &mut Vec<Move>, mut bishops: u64, b: &Board, opp: u64) {
     while bishops > 0 {
         let from = bishops.trailing_zeros();
-        let mut attack = mt.get_bishop_moves(
+        let mut attack = MT.get_bishop_moves(
             b.util[2],
             bishops.trailing_zeros() as usize
         ) & opp;
@@ -454,8 +491,8 @@ fn gen_bishop_attacks(moves: &mut Vec<Move>, mut bishops: u64, b: &Board, opp: u
 fn gen_queen_quiet(moves: &mut Vec<Move>, mut queens: u64, b: &Board, occ: u64) {
     while queens > 0 {
         let from = queens.trailing_zeros();
-        let mut quiet = mt.get_rook_moves(b.util[2],queens.trailing_zeros() as usize);
-        quiet |= mt.get_bishop_moves(b.util[2], queens.trailing_zeros() as usize );
+        let mut quiet = MT.get_rook_moves(b.util[2],queens.trailing_zeros() as usize);
+        quiet |= MT.get_bishop_moves(b.util[2], queens.trailing_zeros() as usize );
         quiet &= !occ;
 
         // print_bb(quiet);
@@ -474,8 +511,8 @@ fn gen_queen_quiet(moves: &mut Vec<Move>, mut queens: u64, b: &Board, occ: u64) 
 fn gen_queen_attacks(moves: &mut Vec<Move>, mut queens: u64, b: &Board, opp: u64) {
     while queens > 0 {
         let from = queens.trailing_zeros();
-        let mut attack = mt.get_rook_moves(b.util[2], queens.trailing_zeros() as usize);
-        attack |= mt.get_bishop_moves(b.util[2], queens.trailing_zeros() as usize);
+        let mut attack = MT.get_rook_moves(b.util[2], queens.trailing_zeros() as usize);
+        attack |= MT.get_bishop_moves(b.util[2], queens.trailing_zeros() as usize);
         attack &= opp;
 
         // print_bb(attack);
@@ -498,7 +535,7 @@ fn gen_queen_attacks(moves: &mut Vec<Move>, mut queens: u64, b: &Board, opp: u64
 
 fn gen_king_quiet(moves: &mut Vec<Move>, b: &Board) {
     let from = b.pieces[10+b.colour_to_move].trailing_zeros();
-    let mut quiet = mt.king_moves[from as usize] & !b.util[2];
+    let mut quiet = MT.king_moves[from as usize] & !b.util[2];
     while quiet > 0 {
         moves.push(Move::new(from, quiet.trailing_zeros(),
                              (10 + b.colour_to_move) as u32, 0, QUIET));
@@ -508,7 +545,7 @@ fn gen_king_quiet(moves: &mut Vec<Move>, b: &Board) {
 
 fn gen_king_attack(moves: &mut Vec<Move>, b: &Board) {
     let from = b.pieces[10+b.colour_to_move].trailing_zeros();
-    let mut attack = mt.king_moves[from as usize] & b.util[1-b.colour_to_move];
+    let mut attack = MT.king_moves[from as usize] & b.util[1-b.colour_to_move];
     while attack > 0 {
         let to = attack.trailing_zeros();
         moves.push(Move::new(from, to, (10+b.colour_to_move) as u32,
@@ -560,14 +597,14 @@ fn gen_king_in_check(moves: &mut Vec<Move>, b: &Board) {
     while quiets > 0 {
         let to = quiets.trailing_zeros();
         quiets &= quiets - 1;
-        // if sq_attacked(b, to as usize, occ, b.colour_to_move^1, mt) { continue; }
+        // if sq_attacked(b, to as usize, occ, b.colour_to_move^1, MT) { continue; }
         moves.push(Move::new(from, to,(10 + b.colour_to_move) as u32, 0, QUIET));
     }
 
     while attacks > 0 {
         let to = attacks.trailing_zeros();
         attacks &= attacks - 1;
-        // if sq_attacked(b, to as usize, b.util[2], b.colour_to_move^1, mt) { continue; }
+        // if sq_attacked(b, to as usize, b.util[2], b.colour_to_move^1, MT) { continue; }
         moves.push(Move::new(from, to, (10+b.colour_to_move) as u32,
                              get_xpiece(b, to), CAP));
     }
@@ -576,35 +613,38 @@ fn gen_king_in_check(moves: &mut Vec<Move>, b: &Board) {
 pub fn possible_king_moves(
     b: &Board,
     ksq: usize,
-    colour_to_move: usize,
+    opp_colour: usize,
     occ: u64
 ) -> u64 {
     // possible starts out as any move that doesnt move over its own pieces
-    let mut possible = mt.king_moves[ksq] & !b.util[b.colour_to_move];
+    let mut possible = MT.king_moves[ksq] & !b.util[b.colour_to_move];
 
     // pawn moves and double pushes
-    possible &= if colour_to_move == 0 {
+    possible &= if opp_colour == 0 {
         !( ((b.pieces[0] & !FA) << 7) | ((b.pieces[0] & !FH) << 9) )
     } else {
         !( ((b.pieces[1] & !FH) >> 7) | ((b.pieces[1] & !FA) >> 9) )
     };
 
+    // enemy king
+    possible &= !(MT.king_moves[b.pieces[KING+ opp_colour].trailing_zeros() as usize]);
+
     // knight moves
-    let mut knights = b.pieces[KNIGHT+colour_to_move];
+    let mut knights = b.pieces[KNIGHT+ opp_colour];
     while knights > 0 {
-        possible &= !(mt.knight_moves[knights.trailing_zeros() as usize]);
+        possible &= !(MT.knight_moves[knights.trailing_zeros() as usize]);
         knights &= knights - 1;
     }
     // rook/queen
-    let mut rook_queen = b.pieces[ROOK+colour_to_move] | b.pieces[QUEEN+colour_to_move];
+    let mut rook_queen = b.pieces[ROOK+ opp_colour] | b.pieces[QUEEN+ opp_colour];
     while rook_queen > 0 {
-        possible &= !(mt.get_rook_moves(occ, rook_queen.trailing_zeros() as usize));
+        possible &= !(MT.get_rook_moves(occ, rook_queen.trailing_zeros() as usize));
         rook_queen &= rook_queen -1
     }
     // bishop/queen
-    let mut bishop_queen = b.pieces[BISHOP+colour_to_move] | b.pieces[QUEEN+colour_to_move];
+    let mut bishop_queen = b.pieces[BISHOP+ opp_colour] | b.pieces[QUEEN+ opp_colour];
     while bishop_queen > 0 {
-        possible &= !(mt.get_bishop_moves(occ, bishop_queen.trailing_zeros() as usize));
+        possible &= !(MT.get_bishop_moves(occ, bishop_queen.trailing_zeros() as usize));
         bishop_queen &= bishop_queen-1
     }
 
@@ -613,9 +653,7 @@ pub fn possible_king_moves(
 
 pub fn get_piece(b: &Board, index: u32) -> u32 {
     let sq = SQUARES[index as usize];
-
     let start = b.colour_to_move;
-
     for piece in (start..12).step_by(2) {
         if sq & b.pieces[piece] > 0 {
             return piece as u32;
@@ -625,12 +663,9 @@ pub fn get_piece(b: &Board, index: u32) -> u32 {
     12
 }
 
-
 pub fn get_xpiece(b: &Board, index: u32) -> u32 {
     let sq = SQUARES[index as usize];
-
     let start = 1- b.colour_to_move;
-
     for xpiece in (start..12).step_by(2) {
         if sq & b.pieces[xpiece] > 0 {
             return xpiece as u32;
@@ -640,39 +675,31 @@ pub fn get_xpiece(b: &Board, index: u32) -> u32 {
     12
 }
 
-// colour_to_move is the colour that IS ATTACKING
 // occ is the bb that is fed to the magic bb function (for hiding the king in check move gen)
-pub fn sq_attacked(b: &Board, sq: usize, occ: u64, colour_to_move: usize) -> bool {
-    let mut attackers = 0;
-    attackers |= mt.pawn_attacks[colour_to_move^1][sq] & b.pieces[PAWN + colour_to_move];
-    attackers |= mt.knight_moves[sq] & b.pieces[KNIGHT + colour_to_move];
-    attackers |= mt.king_moves[sq] & b.pieces[KING + colour_to_move];
-
-    let bishop_queen = b.pieces[QUEEN + colour_to_move] | b.pieces[BISHOP + colour_to_move];
-    attackers |= mt.get_bishop_moves(occ, sq) & bishop_queen;
-
-    let rook_queen = b.pieces[ROOK + colour_to_move] | b.pieces[QUEEN + colour_to_move];
-    attackers |= mt.get_rook_moves(occ, sq) & rook_queen;
-
-    attackers != 0
+pub fn sq_attacked(b: &Board, sq: usize, occ: u64, colour_of_attacker: usize) -> bool {
+    MT.pawn_attacks[colour_of_attacker ^ 1][sq] & b.pieces[PAWN + colour_of_attacker] > 0 ||
+    MT.knight_moves[sq] & b.pieces[KNIGHT + colour_of_attacker] > 0 ||
+    MT.king_moves[sq] & b.pieces[KING + colour_of_attacker] > 0 ||
+    MT.get_bishop_moves(occ, sq) & (b.pieces[QUEEN + colour_of_attacker] | b.pieces[BISHOP + colour_of_attacker]) > 0 ||
+    MT.get_rook_moves(occ, sq) & (b.pieces[ROOK + colour_of_attacker] | b.pieces[QUEEN + colour_of_attacker]) > 0
 }
 
-// #[inline(always)]
+#[inline]
 pub fn moved_into_check(b: &Board, m: &Move) -> bool {
     let ksq = b.pieces[KING+(b.colour_to_move^1)].trailing_zeros() as usize;
     // the m from sq is inline with the king return sq_attacked, otherwise false
-    SQUARES[m.from() as usize] & mt.superrays[ksq] > 0 &&
+    SQUARES[m.from() as usize] & MT.superrays[ksq] > 0 &&
         sq_attacked(b, ksq, b.util[2], b.colour_to_move)
 }
 
-// #[inline(always)]
+#[inline]
 pub fn _moved_into_check(b: &Board, m: &Move) -> bool {
     sq_attacked(b, b.pieces[KING+(b.colour_to_move^1)].trailing_zeros() as usize,
         b.util[2], b.colour_to_move)
 
 }
 
-#[inline(always)]
+#[inline]
 pub fn is_in_check(b: &Board) -> bool {
     sq_attacked(b, b.pieces[KING+b.colour_to_move].trailing_zeros() as usize,
                 b.util[2], b.colour_to_move^1)
@@ -681,19 +708,19 @@ pub fn is_in_check(b: &Board) -> bool {
 pub fn get_attackers(b: &Board, colour_to_move: usize, sq: usize) -> u64 {
     let mut attackers = 0;
     let pawns = b.pieces[PAWN + colour_to_move];
-    attackers |= mt.pawn_attacks[colour_to_move^1][sq] & pawns;
+    attackers |= MT.pawn_attacks[colour_to_move^1][sq] & pawns;
 
     let knights = b.pieces[KNIGHT + colour_to_move];
-    attackers |= mt.knight_moves[sq] & knights;
+    attackers |= MT.knight_moves[sq] & knights;
 
     let king = b.pieces[KING + colour_to_move];
-    attackers |= mt.king_moves[sq] & king;
+    attackers |= MT.king_moves[sq] & king;
 
     let bishop_queen = b.pieces[QUEEN + colour_to_move] | b.pieces[BISHOP + colour_to_move];
-    attackers |= mt.get_bishop_moves(b.util[2], sq) & bishop_queen;
+    attackers |= MT.get_bishop_moves(b.util[2], sq) & bishop_queen;
 
     let rook_queen = b.pieces[ROOK + colour_to_move] | b.pieces[QUEEN + colour_to_move];
-    attackers |= mt.get_rook_moves(b.util[2], sq) & rook_queen;
+    attackers |= MT.get_rook_moves(b.util[2], sq) & rook_queen;
 
     attackers
 }
@@ -717,10 +744,10 @@ pub fn is_legal_move(b: &Board, m: &Move) -> bool {
 
 fn get_pos_ray_dir(lower: u32, higher: u32) -> usize {
     for dir in 0..4 {
-        if SQUARES[higher as usize] & mt.rays[dir][lower as usize] > 0 { return dir; }
+        if SQUARES[higher as usize] & MT.rays[dir][lower as usize] > 0 { return dir; }
     }
     for dir in 4..8 {
-        if SQUARES[lower as usize] & mt.rays[dir][higher as usize] > 0 { return dir-4; }
+        if SQUARES[lower as usize] & MT.rays[dir][higher as usize] > 0 { return dir-4; }
     }
 
     panic!("Could not find ray dir")

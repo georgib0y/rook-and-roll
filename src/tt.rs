@@ -3,12 +3,13 @@ use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::RwLock;
 use lazy_static::lazy_static;
 use rand::prelude::*;
+use rand_chacha::ChaCha20Rng;
 use rand::distributions;
 use rand::distributions::Standard;
 
 // const TTABLE_SIZE: usize = 10;
 //
-const TTABLE_SIZE: usize = 1048576; // 2^20
+const TTABLE_SIZE: usize = 1 << 20; // 2^20
 const TT_IDX_MASK: u64 = 0xFFFFF;
 
 // const TTABLE_SIZE: usize = 65536; // 2^16
@@ -100,7 +101,6 @@ impl AtomicTT {
     pub fn get(&self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
         let entry = &self.ttable[(hash & TT_IDX_MASK) as usize];
 
-        // TODO you could experiment with orderings
         if entry.e_type.load(ORDER) == UNSET_TT_FLAG {
             None
         } else {
@@ -172,23 +172,20 @@ impl AtomicTTEntry {
     }
 }
 
-
-
-/*
-    --- zorbist array indexing ---
-    0-767: piece positions
-    768: colour
-    769-772: castle rights
-    773-780: file of ep square
-*/
-// TODO maybe beef up the rando on this one, or find a good seed somehow
+// zorbist array indexing:
+// 0-767: piece positions, 768: colour, 769-772: castle rights, 773-780: file of ep square
 fn init_zorbist_array() -> Box<[u64]> {
     let mut zorbist_array: [u64; 781] = [0; 781];
 
-    let mut prng = rand::thread_rng();
+    let mut z_hash = 0u64;
+    // may be a good seed or may not be (could try flipping the reverse around if not)
+    let mut prng = ChaCha20Rng::seed_from_u64(72520922902527);
+
     for z in &mut zorbist_array  {
-        *z = prng.gen::<u64>()
+        *z = prng.gen::<u64>();
+        z_hash ^= *z;
     }
+
 
     Box::new(zorbist_array)
 }

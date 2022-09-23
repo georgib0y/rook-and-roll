@@ -1,5 +1,4 @@
 #![allow(unused)]
-#![allow(non_upper_case_globals)]
 use std::sync::Arc;
 use lazy_static::lazy_static;
 use rand::prelude::*;
@@ -9,7 +8,7 @@ use crate::moves::Move;
 use crate::print_bb;
 
 lazy_static!{
-    pub static ref mt: MoveTables = MoveTables::new();
+    pub static ref MT: MoveTables = MoveTables::new();
 }
 
 

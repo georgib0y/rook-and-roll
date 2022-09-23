@@ -1,0 +1,362 @@
+02:01:05 [INFO] uci
+
+02:01:05 [INFO] id name rustinator2
+id author george
+uciok
+02:01:05 [INFO] isready
+
+02:01:05 [INFO] readyok
+02:01:05 [INFO] ucinewgame
+
+02:01:07 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4
+
+02:01:07 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:07 [INFO] info string starting search
+02:01:07 [INFO] info depth 1 score cp -5
+02:01:07 [INFO] info depth 2 score cp -55
+02:01:07 [INFO] info depth 3 score cp -5
+02:01:07 [INFO] info depth 4 score cp -55
+02:01:08 [INFO] info depth 5 score cp -15
+02:01:08 [INFO] bestmove d7d5
+02:01:10 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4
+
+02:01:10 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:10 [INFO] info string starting search
+02:01:10 [INFO] info depth 1 score cp 40
+02:01:10 [INFO] info depth 2 score cp -10
+02:01:10 [INFO] info depth 3 score cp 40
+02:01:10 [INFO] info depth 4 score cp -10
+02:01:10 [INFO] info depth 5 score cp 10
+02:01:10 [INFO] bestmove e7e6
+02:01:11 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5
+
+02:01:11 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:11 [INFO] info string starting search
+02:01:11 [INFO] info depth 1 score cp 55
+02:01:11 [INFO] info depth 2 score cp 5
+02:01:11 [INFO] info depth 3 score cp 55
+02:01:11 [INFO] info depth 4 score cp 10
+02:01:11 [INFO] info depth 5 score cp 50
+02:01:11 [INFO] bestmove b8c6
+02:01:12 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6
+
+02:01:12 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:12 [INFO] info string starting search
+02:01:12 [INFO] info depth 1 score cp 155
+02:01:12 [INFO] info depth 2 score cp 105
+02:01:12 [INFO] info depth 3 score cp 140
+02:01:12 [INFO] info depth 4 score cp 100
+02:01:14 [INFO] info depth 5 score cp 105
+02:01:14 [INFO] bestmove b7a6
+02:01:15 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4
+
+02:01:15 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:15 [INFO] info string starting search
+02:01:15 [INFO] info depth 1 score cp 270
+02:01:15 [INFO] info depth 2 score cp 270
+02:01:15 [INFO] info depth 3 score cp 305
+02:01:15 [INFO] info depth 4 score cp 285
+02:01:15 [INFO] info depth 5 score cp 290
+02:01:15 [INFO] bestmove f8b4
+02:01:20 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2
+
+02:01:20 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:20 [INFO] info string starting search
+02:01:20 [INFO] info depth 1 score cp 905
+02:01:20 [INFO] info depth 2 score cp 905
+02:01:20 [INFO] info depth 3 score cp 905
+02:01:20 [INFO] info depth 4 score cp 900
+02:01:20 [INFO] info depth 5 score cp 885
+02:01:20 [INFO] bestmove d8h4
+02:01:22 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4
+
+02:01:22 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:22 [INFO] info string starting search
+02:01:22 [INFO] info depth 1 score cp 820
+02:01:22 [INFO] info depth 2 score cp 16383
+02:01:22 [INFO] info depth 3 score cp 16383
+02:01:22 [INFO] info depth 4 score cp 16383
+02:01:25 [INFO] info depth 5 score cp 16383
+02:01:25 [INFO] bestmove h4f2
+02:01:28 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2
+
+02:01:28 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:28 [INFO] info string starting search
+02:01:28 [INFO] info depth 1 score cp 30
+02:01:28 [INFO] info depth 2 score cp 20
+02:01:28 [INFO] info depth 3 score cp 55
+02:01:28 [INFO] info depth 4 score cp 30
+02:01:32 [INFO] info depth 5 score cp 50
+02:01:32 [INFO] bestmove g8f6
+02:01:34 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4
+
+02:01:34 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:34 [INFO] info string starting search
+02:01:34 [INFO] info depth 1 score cp 40
+02:01:34 [INFO] info depth 2 score cp 16383
+02:01:34 [INFO] info depth 3 score cp 16383
+02:01:34 [INFO] info depth 4 score cp 16383
+02:01:34 [INFO] info depth 5 score cp 16383
+02:01:34 [INFO] bestmove f6g4
+02:01:38 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3
+
+02:01:38 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:38 [INFO] info string starting search
+02:01:38 [INFO] info depth 1 score cp -135
+02:01:38 [INFO] info depth 2 score cp -135
+02:01:38 [INFO] info depth 3 score cp -135
+02:01:39 [INFO] info depth 4 score cp -20
+02:01:52 [INFO] info depth 5 score cp -25
+02:01:52 [INFO] bestmove c6b4
+02:01:54 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4
+
+02:01:54 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:54 [INFO] info string starting search
+02:01:54 [INFO] info depth 1 score cp -135
+02:01:54 [INFO] info depth 2 score cp 16383
+02:01:54 [INFO] info depth 3 score cp 16383
+02:01:54 [INFO] info depth 4 score cp 16383
+02:01:54 [INFO] info depth 5 score cp 16383
+02:01:54 [INFO] bestmove e6e5
+02:01:56 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5
+
+02:01:56 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:56 [INFO] info string starting search
+02:01:56 [INFO] info depth 1 score cp -125
+02:01:56 [INFO] info depth 2 score cp 16383
+02:01:56 [INFO] info depth 3 score cp 16383
+02:01:56 [INFO] info depth 4 score cp 16383
+02:01:56 [INFO] info depth 5 score cp 16383
+02:01:56 [INFO] bestmove f7f6
+02:01:57 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6
+
+02:01:57 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:01:57 [INFO] info string starting search
+02:01:57 [INFO] info depth 1 score cp -235
+02:01:57 [INFO] info depth 2 score cp 16383
+02:01:57 [INFO] info depth 3 score cp 16383
+02:01:57 [INFO] info depth 4 score cp 16383
+02:01:57 [INFO] info depth 5 score cp 16383
+02:01:57 [INFO] bestmove h8f8
+02:02:02 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7
+
+02:02:02 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:02 [INFO] info string starting search
+02:02:02 [INFO] info depth 1 score cp 0
+02:02:02 [INFO] info depth 2 score cp 16383
+02:02:02 [INFO] info depth 3 score cp 16383
+02:02:02 [INFO] info depth 4 score cp 16383
+02:02:03 [INFO] info depth 5 score cp 16383
+02:02:03 [INFO] bestmove f8f7
+02:02:04 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8
+
+02:02:04 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:04 [INFO] info string starting search
+02:02:04 [INFO] info depth 1 score cp 0
+02:02:04 [INFO] info depth 2 score cp 16383
+02:02:04 [INFO] info depth 3 score cp 16383
+02:02:05 [INFO] info depth 4 score cp 16383
+02:02:05 [INFO] info depth 5 score cp 16383
+02:02:05 [INFO] bestmove f7g7
+02:02:06 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7
+
+02:02:06 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:06 [INFO] info string starting search
+02:02:06 [INFO] info depth 1 score cp -735
+02:02:06 [INFO] info depth 2 score cp -715
+02:02:06 [INFO] info depth 3 score cp -715
+02:02:06 [INFO] info depth 4 score cp -715
+02:02:06 [INFO] info depth 5 score cp -705
+02:02:06 [INFO] bestmove b4c2
+02:02:13 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5
+
+02:02:13 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:13 [INFO] info string starting search
+02:02:13 [INFO] info depth 1 score cp -400
+02:02:13 [INFO] info depth 2 score cp -380
+02:02:13 [INFO] info depth 3 score cp -380
+02:02:13 [INFO] info depth 4 score cp -380
+02:02:13 [INFO] info depth 5 score cp -360
+02:02:13 [INFO] bestmove a6b5
+02:02:16 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3
+
+02:02:16 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:16 [INFO] info string starting search
+02:02:16 [INFO] info depth 1 score cp -125
+02:02:16 [INFO] info depth 2 score cp -125
+02:02:16 [INFO] info depth 3 score cp -80
+02:02:16 [INFO] info depth 4 score cp -105
+02:02:16 [INFO] info depth 5 score cp -415
+02:02:16 [INFO] bestmove c2d4
+02:02:18 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5
+
+02:02:18 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:18 [INFO] info string starting search
+02:02:18 [INFO] info depth 1 score cp -535
+02:02:18 [INFO] info depth 2 score cp 16383
+02:02:18 [INFO] info depth 3 score cp 16383
+02:02:18 [INFO] info depth 4 score cp 16383
+02:02:18 [INFO] info depth 5 score cp 16383
+02:02:18 [INFO] bestmove d4e6
+02:02:25 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7
+
+02:02:25 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:25 [INFO] info string starting search
+02:02:25 [INFO] info depth 1 score cp -560
+02:02:25 [INFO] info depth 2 score cp 16383
+02:02:25 [INFO] info depth 3 score cp 16383
+02:02:25 [INFO] info depth 4 score cp 16383
+02:02:25 [INFO] info depth 5 score cp 16383
+02:02:25 [INFO] bestmove e6f8
+02:02:27 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7
+
+02:02:27 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:27 [INFO] info string starting search
+02:02:27 [INFO] info depth 1 score cp -575
+02:02:27 [INFO] info depth 2 score cp 16383
+02:02:27 [INFO] info depth 3 score cp 16383
+02:02:27 [INFO] info depth 4 score cp 16383
+02:02:27 [INFO] info depth 5 score cp 16383
+02:02:27 [INFO] bestmove f8e6
+02:02:29 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6
+
+02:02:29 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:29 [INFO] info string starting search
+02:02:29 [INFO] info depth 1 score cp -630
+02:02:29 [INFO] info depth 2 score cp 16383
+02:02:29 [INFO] info depth 3 score cp 16383
+02:02:29 [INFO] info depth 4 score cp 16383
+02:02:29 [INFO] info depth 5 score cp 16383
+02:02:29 [INFO] bestmove e6f8
+02:02:31 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6
+
+02:02:31 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:31 [INFO] info string starting search
+02:02:31 [INFO] info depth 1 score cp -710
+02:02:31 [INFO] info depth 2 score cp 16383
+02:02:31 [INFO] info depth 3 score cp 16383
+02:02:31 [INFO] info depth 4 score cp 16383
+02:02:31 [INFO] info depth 5 score cp 16383
+02:02:31 [INFO] bestmove f8d7
+02:02:33 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6
+
+02:02:33 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:33 [INFO] info string starting search
+02:02:33 [INFO] info depth 1 score cp -630
+02:02:33 [INFO] info depth 2 score cp 16383
+02:02:33 [INFO] info depth 3 score cp 16383
+02:02:33 [INFO] info depth 4 score cp 16383
+02:02:33 [INFO] info depth 5 score cp 16383
+02:02:33 [INFO] bestmove d7c5
+02:02:35 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5
+
+02:02:35 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:35 [INFO] info string starting search
+02:02:35 [INFO] info depth 1 score cp -735
+02:02:35 [INFO] info depth 2 score cp 16383
+02:02:35 [INFO] info depth 3 score cp 16383
+02:02:35 [INFO] info depth 4 score cp 16383
+02:02:35 [INFO] info depth 5 score cp 16383
+02:02:35 [INFO] bestmove c5d3
+02:02:40 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4
+
+02:02:40 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:40 [INFO] info string starting search
+02:02:40 [INFO] info depth 1 score cp -760
+02:02:40 [INFO] info depth 2 score cp 16383
+02:02:40 [INFO] info depth 3 score cp 16383
+02:02:40 [INFO] info depth 4 score cp 16383
+02:02:40 [INFO] info depth 5 score cp 16383
+02:02:40 [INFO] bestmove c7c5
+02:02:42 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4 c7c5 d4d3
+
+02:02:42 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:42 [INFO] info string starting search
+02:02:42 [INFO] info depth 1 score cp -1110
+02:02:42 [INFO] info depth 2 score cp 16383
+02:02:42 [INFO] info depth 3 score cp 16383
+02:02:42 [INFO] info depth 4 score cp 16383
+02:02:42 [INFO] info depth 5 score cp 16383
+02:02:42 [INFO] bestmove c5c4
+02:02:44 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4 c7c5 d4d3 c5c4 d3d4
+
+02:02:44 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:44 [INFO] info string starting search
+02:02:44 [INFO] info depth 1 score cp -1080
+02:02:44 [INFO] info depth 2 score cp -1130
+02:02:44 [INFO] info depth 3 score cp -1210
+02:02:44 [INFO] info depth 4 score cp -1210
+02:02:44 [INFO] info depth 5 score cp -16380
+02:02:44 [INFO] bestmove e8f7
+02:02:46 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4 c7c5 d4d3 c5c4 d3d4 e8f7 h2h4
+
+02:02:46 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:46 [INFO] info string starting search
+02:02:46 [INFO] info depth 1 score cp -1065
+02:02:46 [INFO] info depth 2 score cp -1115
+02:02:46 [INFO] info depth 3 score cp -1095
+02:02:46 [INFO] info depth 4 score cp -1115
+02:02:47 [INFO] info depth 5 score cp -1420
+02:02:47 [INFO] bestmove c8g4
+02:02:49 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4 c7c5 d4d3 c5c4 d3d4 e8f7 h2h4 c8g4 g1h3
+
+02:02:49 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:49 [INFO] info string starting search
+02:02:49 [INFO] info depth 1 score cp -1060
+02:02:49 [INFO] info depth 2 score cp -1105
+02:02:49 [INFO] info depth 3 score cp -1145
+02:02:49 [INFO] info depth 4 score cp -1145
+02:02:49 [INFO] info depth 5 score cp -16380
+02:02:49 [INFO] bestmove a8g8
+02:02:51 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4 c7c5 d4d3 c5c4 d3d4 e8f7 h2h4 c8g4 g1h3 a8g8 h1f1
+
+02:02:51 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:51 [INFO] info string starting search
+02:02:51 [INFO] info depth 1 score cp -1315
+02:02:51 [INFO] info depth 2 score cp -1315
+02:02:51 [INFO] info depth 3 score cp -16382
+02:02:51 [INFO] info depth 4 score cp -16382
+02:02:51 [INFO] info depth 5 score cp -16382
+02:02:51 [INFO] bestmove g4f3
+02:02:53 [INFO] position fen rnbqkbnr/pppppp1p/6p1/8/8/3P4/PPP1PPPP/RNBQKBNR w KQkq - 0 2 moves d3d4 d7d5 a2a4 e7e6 a4a5 b8c6 a5a6 b7a6 b2b4 f8b4 d1d2 d8h4 d2b4 h4f2 e1f2 g8f6 e2e4 f6g4 f2g3 c6b4 g3g4 e6e5 g4g5 f7f6 g5f6 h8f8 f6g7 f8f7 g7g8 f7g7 g8g7 b4c2 f1b5 a6b5 b1c3 c2d4 c3d5 d4e6 g7h7 e6f8 h7g7 f8e6 g7g6 e6f8 g6f6 f8d7 f6e6 d7c5 e6e5 c5d3 e5d4 c7c5 d4d3 c5c4 d3d4 e8f7 h2h4 c8g4 g1h3 a8g8 h1f1 g4f3 f1f3
+
+02:02:53 [INFO] go wtime 60000 winc 0 btime 60000 binc 0
+
+02:02:53 [INFO] info string starting search
+02:02:53 [INFO] info depth 1 score cp -2147483647
+02:02:53 [INFO] info depth 2 score cp -2147483647
+02:02:53 [INFO] info depth 3 score cp -2147483647
+02:02:53 [INFO] info depth 4 score cp -2147483647
+02:02:53 [INFO] info depth 5 score cp -2147483647
+02:02:53 [ERROR] Did not find a best move

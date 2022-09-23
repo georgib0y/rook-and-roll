@@ -9,6 +9,7 @@ movetype 0-12,  4 bits
 
 ep, last castle state and last halfmove can all be stored in search - aha not with copy move tho
 
+// TODO pretty shure this ius outdated
 movetypes:
 0   quiet
 1   push
@@ -68,6 +69,12 @@ impl Move {
     pub fn move_type(&self) -> u32 {
         self.m & 0xF
     }
+    
+    #[inline]
+    pub fn all(&self) -> (usize, usize, usize, usize, u32) {
+        ( self.from() as usize, self.to() as usize, self.piece() as usize, 
+            self.xpiece() as usize, self.move_type() )
+    }
 
     pub fn new_from_text(text: &str, b: &Board) -> Move {
         let from = sq_from_text(&text[0..2]) as u32;
@@ -81,7 +88,6 @@ impl Move {
 
         let promo_piece= (promo.unwrap_or(12)) as u32;
 
-
         let piece = get_piece(b, from);
         let mut xpiece = get_xpiece(b, to);
 
@@ -89,11 +95,10 @@ impl Move {
 
         if piece < 2 && (from as i32 - to as i32).abs() == 16 {
             move_type = DOUBLE;
-        } else if piece == 10 && piece == 11 {
-            let diff = from as i32 - to as i32;
-            if diff == -2 {
+        } else if piece == 10 || piece == 11 {
+            if (from as i32 - to as i32) == -2 {
                 move_type = KINGSIDE + b.colour_to_move as u32;
-            } else if diff == 2{
+            } else if (from as i32 - to as i32) == 2{
                 move_type = QUEENSIDE + b.colour_to_move as u32;
             }
         }
