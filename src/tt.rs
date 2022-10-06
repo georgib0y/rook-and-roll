@@ -1,11 +1,11 @@
+use lazy_static::lazy_static;
+use rand::distributions;
+use rand::distributions::Standard;
+use rand::prelude::*;
+use rand_chacha::ChaCha20Rng;
 use std::borrow::BorrowMut;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::RwLock;
-use lazy_static::lazy_static;
-use rand::prelude::*;
-use rand_chacha::ChaCha20Rng;
-use rand::distributions;
-use rand::distributions::Standard;
 
 // const TTABLE_SIZE: usize = 10;
 //
@@ -15,11 +15,11 @@ const TT_IDX_MASK: u64 = 0xFFFFF;
 // const TTABLE_SIZE: usize = 65536; // 2^16
 // const TT_IDX_MASK: u64  = 0xFFFF;
 
-pub const SET_TT_FLAG: u8 = 0;
-pub const UNSET_TT_FLAG: u8 = 0;
+pub const PV_TT_FLAG: u8 = 0;
+pub const ALPHA_TT_FLAG: u8 = 1;
+pub const BETA_TT_FLAG: u8 = 2;
 
 pub const ORDER: Ordering = Ordering::Release;
-
 
 /*
 TODO
@@ -44,43 +44,56 @@ AN idea to minimize this (could be a bad idea but it's MY idea at least):
 
 // sequential transposition table
 pub struct SeqTT {
-    ttable: Box<[TTEntry]>,
+    ttable: Box<[Option<TTEntry>]>,
     hit_count: usize,
-    miss_count: usize
+    miss_count: usize,
 }
 
 impl SeqTT {
     pub fn new() -> SeqTT {
         SeqTT {
-            ttable: (0..TTABLE_SIZE)
-                .map(|_| TTEntry::random_entry())
-                .collect(),
+            ttable: (0..TTABLE_SIZE).map(|_| None).collect(),
             hit_count: 0,
             miss_count: 0,
         }
     }
 
-    pub fn get(&mut self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
-        let entry = self.ttable[(hash & TT_IDX_MASK) as usize];
-        if entry.e_type == UNSET_TT_FLAG {
-            None
+    pub fn get(&mut self, hash: u64, depth: usize, alpha: i32, beta: i32) -> Option<i32> {
+        if let Some(entry) = self.ttable[(hash & TT_IDX_MASK) as usize] {
+            if entry.hash != hash || entry.depth < depth {
+                return None;
+            }
+
+            if entry.e_type == PV_TT_FLAG {
+                Some(entry.score)
+            } else if entry.e_type == ALPHA_TT_FLAG && entry.score <= alpha {
+                Some(alpha)
+            } else if entry.e_type == BETA_TT_FLAG && entry.score >= beta {
+                Some(beta)
+            } else {
+                None
+            }
         } else {
-            Some(entry.score)
+            None
         }
     }
 
-    pub fn insert(&mut self, hash: u64, score: i32, e_type: u8) {
-        let entry = TTEntry { hash, score, e_type };
-        self.ttable[(hash & TT_IDX_MASK) as usize] = entry;
+    pub fn insert(&mut self, hash: u64, score: i32, e_type: u8, depth: usize) {
+        let entry = TTEntry {
+            hash,
+            score,
+            e_type,
+            depth,
+        };
+        self.ttable[(hash & TT_IDX_MASK) as usize] = Some(entry);
     }
-
 }
 
 // parallel transposition table
 pub struct AtomicTT {
     ttable: Box<[AtomicTTEntry]>,
     hit_count: usize,
-    miss_count: usize
+    miss_count: usize,
 }
 
 impl AtomicTT {
@@ -95,35 +108,19 @@ impl AtomicTT {
     }
 
     pub fn get(&self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
-        let entry = &self.ttable[(hash & TT_IDX_MASK) as usize];
-
-        if entry.e_type.load(ORDER) == UNSET_TT_FLAG {
-            None
-        } else {
-            Some(entry.score.load(ORDER))
-        }
+        todo!()
     }
 
     pub fn insert(&self, hash: u64, score: i32, e_type: u8) {
-        self.ttable[(hash & TT_IDX_MASK) as usize].hash.store(hash, ORDER);
-        self.ttable[(hash & TT_IDX_MASK) as usize].score.store(score, ORDER);
-        self.ttable[(hash & TT_IDX_MASK) as usize].e_type.store(e_type, ORDER);
-    }
-
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum EntryType {
-    Set,
-    Unset,
-}
-
-impl Distribution<EntryType> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> EntryType {
-        match rng.gen_range(0..=2) {
-            0 => EntryType::Set,
-            _ => EntryType::Unset,
-        }
+        self.ttable[(hash & TT_IDX_MASK) as usize]
+            .hash
+            .store(hash, ORDER);
+        self.ttable[(hash & TT_IDX_MASK) as usize]
+            .score
+            .store(score, ORDER);
+        self.ttable[(hash & TT_IDX_MASK) as usize]
+            .e_type
+            .store(e_type, ORDER);
     }
 }
 
@@ -132,18 +129,16 @@ struct TTEntry {
     hash: u64,
     score: i32,
     e_type: u8,
+    depth: usize,
 }
 
 impl TTEntry {
     pub fn default() -> TTEntry {
-        TTEntry { hash: 0, score: 0, e_type: UNSET_TT_FLAG }
-    }
-
-    pub fn random_entry() -> TTEntry {
         TTEntry {
-            hash: rand::thread_rng().gen(),
-            score: rand::thread_rng().gen(),
-            e_type: rand::thread_rng().gen_range(0..2)
+            hash: 0,
+            score: 0,
+            e_type: PV_TT_FLAG,
+            depth: 0,
         }
     }
 }
@@ -151,19 +146,24 @@ impl TTEntry {
 struct AtomicTTEntry {
     hash: AtomicU64,
     score: AtomicI32,
-    e_type: AtomicU8
+    e_type: AtomicU8,
 }
 
 impl AtomicTTEntry {
     pub fn default() -> TTEntry {
-        TTEntry { hash: 0, score: 0, e_type: UNSET_TT_FLAG }
+        TTEntry {
+            hash: 0,
+            score: 0,
+            e_type: PV_TT_FLAG,
+            depth: 0,
+        }
     }
 
     pub fn random_entry() -> AtomicTTEntry {
         AtomicTTEntry {
             hash: AtomicU64::new(rand::thread_rng().gen()),
             score: AtomicI32::new(rand::thread_rng().gen()),
-            e_type: AtomicU8::new(rand::thread_rng().gen_range(0..2))
+            e_type: AtomicU8::new(rand::thread_rng().gen_range(0..2)),
         }
     }
 }

@@ -11,33 +11,38 @@ use rand_distr::Normal;
 use simplelog::{Config, LevelFilter, WriteLogger};
 use threadpool::ThreadPool;
 
-
-use crate::board::{Board, print_bb};
-use crate::EntryType::Set;
+use crate::board::{print_bb, Board};
 use crate::move_info::BISHOP_MASK;
-use crate::move_tables::{B_BIT, find_magic, MoveTables, print_new_magics, R_BIT, ratt};
-use crate::movegen::{gen_all_moves, gen_check_moves, gen_moves, is_in_check, is_legal_move, moved_into_check, sq_attacked};
+use crate::move_tables::{find_magic, print_new_magics, ratt, MoveTables, B_BIT, R_BIT};
+use crate::movegen::{
+    gen_all_moves, gen_check_moves, gen_moves, is_in_check, is_legal_move, moved_into_check,
+    sq_attacked,
+};
 use crate::moves::Move;
-use crate::perft::{perftree_root, perft, perft_mt_root};
+use crate::perft::{perft, perft_mt_root, perft_new_movegen, perftree_root};
 use crate::search::iterative_deepening;
-use crate::tt::{EntryType, SeqTT, AtomicTT, UNSET_TT_FLAG, SET_TT_FLAG};
+use crate::tt::{AtomicTT, SeqTT};
 use crate::uci::Uci;
+use crate::zorbist::{Zorb};
 
 mod board;
-mod move_tables;
-mod moves;
-mod movegen;
-mod perft;
-mod move_info;
-mod opening_book;
-mod search;
 mod eval;
-mod uci;
+mod move_info;
+mod move_tables;
+mod movegen;
+mod moves;
+mod opening_book;
+mod perft;
+mod search;
 mod tt;
+mod uci;
 mod zorbist;
+mod new_movegen;
 
 
 fn main() {
+    Zorb::init();
+
     if args().count() > 1 {
         do_perftree();
         return;
@@ -45,12 +50,19 @@ fn main() {
 
     // debug();
     do_perf();
+    //
+    // ZORB.show();
+
     return;
 
     // set up logger
     let date_time = chrono::Local::now().format("%d%m%H%M%S").to_string();
     let mut filename = format!("/home/george/Documents/progs/rookandroll/logs/log-{date_time}.log");
-    let _ = WriteLogger::init(LevelFilter::Info, Config::default(), File::create(filename).unwrap());
+    let _ = WriteLogger::init(
+        LevelFilter::Info,
+        Config::default(),
+        File::create(filename).unwrap(),
+    );
 
     let mut uci = Uci::new("george", "rustinator2");
     uci.start();
@@ -85,8 +97,12 @@ fn do_perf() {
     let depth = 6;
     let start = Instant::now();
     let mc = perft(&b, depth);
+    // let mc = perft_new_movegen(&b, depth);
     let stop = start.elapsed();
-    println!("Depth: {depth}\t\tMoves: {mc}\t\tTime: {}ms", stop.as_millis());
+    println!(
+        "Depth: {depth}\t\tMoves: {mc}\t\tTime: {}ms",
+        stop.as_millis()
+    );
 }
 
 fn do_perftree() {
@@ -105,5 +121,8 @@ fn do_perf_mt() {
     let start = Instant::now();
     let mc = perft_mt_root(Arc::new(b), depth, 12);
     let stop = start.elapsed();
-    println!("Depth: {depth}\t\tMoves: {mc}\t\tTime: {}ms", stop.as_millis());
+    println!(
+        "Depth: {depth}\t\tMoves: {mc}\t\tTime: {}ms",
+        stop.as_millis()
+    );
 }

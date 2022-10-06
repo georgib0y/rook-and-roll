@@ -1,22 +1,24 @@
 #![allow(unused)]
-use std::sync::Arc;
-use lazy_static::lazy_static;
-use rand::prelude::*;
 use crate::board::Board;
-use crate::move_info::{BISHOP_MAGIC, BISHOP_MASK, FA, FB, FG, FH, R1, R3, R6, R8, RAYS, ROOK_MAGIC, ROOK_MASK, SQUARES};
+use crate::move_info::{
+    BISHOP_MAGIC, BISHOP_MASK, FA, FB, FG, FH, R1, R3, R6, R8, RAYS, ROOK_MAGIC, ROOK_MASK, SQUARES,
+};
 use crate::moves::Move;
 use crate::print_bb;
+use lazy_static::lazy_static;
+use rand::prelude::*;
+use std::sync::Arc;
 
-lazy_static!{
+// TODO Maybe get rid of lazy static all together?
+lazy_static! {
     pub static ref MT: MoveTables = MoveTables::new();
 }
-
 
 pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
 
 pub struct MoveTables {
-    pub pawn_attacks: Box<[[u64;64]]>,
+    pub pawn_attacks: Box<[[u64; 64]]>,
     pub knight_moves: Box<[u64]>,
     pub king_moves: Box<[u64]>,
     pub rook_moves: Box<[[u64; 4096]]>,
@@ -34,11 +36,13 @@ impl MoveTables {
             rook_moves: gen_rook_move_table(),
             bishop_moves: gen_bishop_move_table(),
             superrays: gen_superray(),
-            rays: &RAYS
+            rays: &RAYS,
         }
     }
 
-    pub fn new_arc() -> Arc<MoveTables> { Arc::new(MoveTables::new()) }
+    pub fn new_arc() -> Arc<MoveTables> {
+        Arc::new(MoveTables::new())
+    }
 
     pub fn get_rook_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         occupancy &= ROOK_MASK[sq];
@@ -68,7 +72,7 @@ impl MoveTables {
 }
 
 fn gen_pawn_attack_table() -> Box<[[u64; 64]]> {
-    let mut pawn_attacks = vec![[0;64];2];
+    let mut pawn_attacks = vec![[0; 64]; 2];
 
     for (i, sq) in SQUARES.iter().enumerate().take(64) {
         //white
@@ -86,7 +90,7 @@ fn gen_pawn_attack_table() -> Box<[[u64; 64]]> {
 }
 
 fn gen_knight_move_table() -> Box<[u64]> {
-    let mut knight_moves = vec![0;64];
+    let mut knight_moves = vec![0; 64];
 
     for index in 0..64 {
         let mut mv = 0;
@@ -107,7 +111,7 @@ fn gen_knight_move_table() -> Box<[u64]> {
 }
 
 fn gen_king_move_table() -> Box<[u64]> {
-    let mut king_moves = vec![0;64];
+    let mut king_moves = vec![0; 64];
 
     for index in 0..64 {
         let mut mv = 0;
@@ -130,13 +134,15 @@ fn gen_king_move_table() -> Box<[u64]> {
 }
 
 fn gen_rook_move_table() -> Box<[[u64; 4096]]> {
-    let mut rook_moves = vec![[0;4096];64];
+    let mut rook_moves = vec![[0; 4096]; 64];
     for sq in 0..64 {
         for blocker_idx in 0..(1 << R_BIT) {
             // add rook moves
-            let blockers = index_to_u64(blocker_idx,
-                                        ROOK_MASK[sq].count_ones() as i32,
-                                        ROOK_MASK[sq]);
+            let blockers = index_to_u64(
+                blocker_idx,
+                ROOK_MASK[sq].count_ones() as i32,
+                ROOK_MASK[sq],
+            );
 
             rook_moves[sq][((blockers.wrapping_mul(ROOK_MAGIC[sq])) >> (64 - R_BIT)) as usize] =
                 ratt(sq as i32, blockers);
@@ -147,12 +153,14 @@ fn gen_rook_move_table() -> Box<[[u64; 4096]]> {
 }
 
 fn gen_bishop_move_table() -> Box<[[u64; 512]]> {
-    let mut bishop_moves = vec![[0;512];64];
+    let mut bishop_moves = vec![[0; 512]; 64];
     for sq in 0..64 {
-        for blocker_idx in 0..(1<<B_BIT) {
-            let blockers = index_to_u64(blocker_idx,
-                                        BISHOP_MASK[sq].count_ones() as i32,
-                                        BISHOP_MASK[sq]);
+        for blocker_idx in 0..(1 << B_BIT) {
+            let blockers = index_to_u64(
+                blocker_idx,
+                BISHOP_MASK[sq].count_ones() as i32,
+                BISHOP_MASK[sq],
+            );
 
             bishop_moves[sq][((blockers.wrapping_mul(BISHOP_MAGIC[sq])) >> (64 - B_BIT)) as usize] =
                 batt(sq as i32, blockers)
@@ -165,13 +173,18 @@ fn gen_bishop_move_table() -> Box<[[u64; 512]]> {
 fn gen_superray() -> Box<[u64]> {
     let mut superray = vec![0; 64];
     for sq in 0..64 {
-        superray[sq] = RAYS[0][sq] | RAYS[1][sq] | RAYS[2][sq] | RAYS[3][sq] |
-            RAYS[4][sq] | RAYS[5][sq] | RAYS[6][sq] | RAYS[7][sq]
+        superray[sq] = RAYS[0][sq]
+            | RAYS[1][sq]
+            | RAYS[2][sq]
+            | RAYS[3][sq]
+            | RAYS[4][sq]
+            | RAYS[5][sq]
+            | RAYS[6][sq]
+            | RAYS[7][sq]
     }
 
     superray.into_boxed_slice()
 }
-
 
 // FOLLOWING CODE IS FROM https://www.chessprogramming.org/Looking_for_Magics
 // only used for generating the magic numbers (not used in actual running)
@@ -199,25 +212,24 @@ fn rand_few_bit_u64() -> u64 {
 }
 
 const BIT_TABLE: [i32; 64] = [
-63, 30, 3, 32, 25, 41, 22, 33, 15, 50, 42, 13, 11, 53, 19, 34, 61, 29, 2,
-51, 21, 43, 45, 10, 18, 47, 1, 54, 9, 57, 0, 35, 62, 31, 40, 4, 49, 5, 52,
-26, 60, 6, 23, 44, 46, 27, 56, 16, 7, 39, 48, 24, 59, 14, 12, 55, 38, 28,
-58, 20, 37, 17, 36, 8
+    63, 30, 3, 32, 25, 41, 22, 33, 15, 50, 42, 13, 11, 53, 19, 34, 61, 29, 2, 51, 21, 43, 45, 10,
+    18, 47, 1, 54, 9, 57, 0, 35, 62, 31, 40, 4, 49, 5, 52, 26, 60, 6, 23, 44, 46, 27, 56, 16, 7,
+    39, 48, 24, 59, 14, 12, 55, 38, 28, 58, 20, 37, 17, 36, 8,
 ];
 
 fn pop_1st_bit(bb: &mut u64) -> i32 {
     let b = *bb ^ (*bb - 1);
     let fold: u32 = ((b & 0xffffffff) ^ (b >> 32)) as u32;
     *bb &= (*bb - 1);
-    BIT_TABLE[ (fold.wrapping_mul(0x783a9b23) >> 26 ) as usize]
+    BIT_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize]
 }
 
-fn index_to_u64 (index: i32, bits: i32, mut mask: u64) -> u64 {
+fn index_to_u64(index: i32, bits: i32, mut mask: u64) -> u64 {
     let mut result: u64 = 0;
     for i in 0..bits {
         let j = pop_1st_bit(&mut mask);
         if index & (1 << i) != 0 {
-            result |= 1<<j;
+            result |= 1 << j;
         }
     }
 
@@ -234,32 +246,39 @@ pub fn ratt(sq: i32, block: u64) -> u64 {
 
     let one: u64 = 1;
 
-    let mut r = rank+1;
+    let mut r = rank + 1;
     while r <= 7 {
-        result |= one <<(file + r*8);
-        if block & (one << (file + r*8))  != 0 { break; }
+        result |= one << (file + r * 8);
+        if block & (one << (file + r * 8)) != 0 {
+            break;
+        }
         r += 1;
     }
 
-
     let mut r = rank - 1;
     while r >= 0 {
-        result |= one <<(file + r*8);
-        if block & (one << (file + r*8)) != 0 { break; }
+        result |= one << (file + r * 8);
+        if block & (one << (file + r * 8)) != 0 {
+            break;
+        }
         r -= 1;
     }
 
     let mut f = file + 1;
     while f <= 7 {
-        result |= one << (f+ rank*8);
-        if block & (one << (f + rank*8)) != 0 { break; }
+        result |= one << (f + rank * 8);
+        if block & (one << (f + rank * 8)) != 0 {
+            break;
+        }
         f += 1;
     }
 
     let mut f = file - 1;
     while f >= 0 {
-        result |= one << (f+ rank*8);
-        if block & (one << (f + rank*8))  != 0 { break; }
+        result |= one << (f + rank * 8);
+        if block & (one << (f + rank * 8)) != 0 {
+            break;
+        }
         f -= 1;
     }
 
@@ -271,47 +290,55 @@ pub fn batt(sq: i32, block: u64) -> u64 {
     let rank = sq / 8;
     let file = sq % 8;
 
-    let mut r = rank+1;
-    let mut f = file+1;
+    let mut r = rank + 1;
+    let mut f = file + 1;
     while r <= 7 && f <= 7 {
-        result |= 1 << (f + r*8);
-        if block & (1 << (f + r*8)) != 0 { break; }
-        r+=1;
-        f+=1;
+        result |= 1 << (f + r * 8);
+        if block & (1 << (f + r * 8)) != 0 {
+            break;
+        }
+        r += 1;
+        f += 1;
     }
 
-    let mut r = rank+1;
-    let mut f = file-1;
+    let mut r = rank + 1;
+    let mut f = file - 1;
     while r <= 7 && f >= 0 {
-        result |= 1 << (f + r*8);
-        if block & (1 << (f + r*8)) != 0 { break; }
-        r+=1;
-        f-=1;
+        result |= 1 << (f + r * 8);
+        if block & (1 << (f + r * 8)) != 0 {
+            break;
+        }
+        r += 1;
+        f -= 1;
     }
 
-    let mut r = rank-1;
-    let mut f = file+1;
+    let mut r = rank - 1;
+    let mut f = file + 1;
     while r >= 0 && f <= 7 {
-        result |= 1 << (f + r*8);
-        if block & (1 << (f + r*8)) != 0 { break; }
-        r-=1;
-        f+=1;
+        result |= 1 << (f + r * 8);
+        if block & (1 << (f + r * 8)) != 0 {
+            break;
+        }
+        r -= 1;
+        f += 1;
     }
 
-    let mut r = rank-1;
-    let mut f = file-1;
+    let mut r = rank - 1;
+    let mut f = file - 1;
     while r >= 0 && f >= 0 {
-        result |= 1 << (f + r*8);
-        if block & (1 << (f + r*8)) != 0 { break; }
-        r-=1;
-        f-=1;
+        result |= 1 << (f + r * 8);
+        if block & (1 << (f + r * 8)) != 0 {
+            break;
+        }
+        r -= 1;
+        f -= 1;
     }
 
     result
 }
 
 fn transform(b: u64, magic: u64, bits: i32) -> usize {
-    (b.wrapping_mul(magic) >> (64 - bits) ) as usize
+    (b.wrapping_mul(magic) >> (64 - bits)) as usize
 }
 
 pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
@@ -319,22 +346,34 @@ pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
     let mut b: [u64; 4096] = [0; 4096];
     let mut used: [u64; 4096] = [0; 4096];
 
-    let mask = if bishop { BISHOP_MASK[sq as usize] } else { ROOK_MASK[sq as usize] };
+    let mask = if bishop {
+        BISHOP_MASK[sq as usize]
+    } else {
+        ROOK_MASK[sq as usize]
+    };
 
     let n = mask.count_ones();
 
-    for i in 0..(1<<n) {
-        b[i] = index_to_u64(i as i32,n as i32, mask);
-        a[i] = if bishop { batt(sq, b[i])} else { ratt(sq, b[i]) };
+    for i in 0..(1 << n) {
+        b[i] = index_to_u64(i as i32, n as i32, mask);
+        a[i] = if bishop {
+            batt(sq, b[i])
+        } else {
+            ratt(sq, b[i])
+        };
     }
 
     for _ in 0..100000000 {
         let magic = rand_few_bit_u64();
-        if (mask.wrapping_mul(magic) & 0xFF00000000000000 ).count_ones() < 6 { continue; }
+        if (mask.wrapping_mul(magic) & 0xFF00000000000000).count_ones() < 6 {
+            continue;
+        }
         used = [0; 4096];
         let mut fail = false;
-        for i in 0..(1<<n) {
-            if fail { break; }
+        for i in 0..(1 << n) {
+            if fail {
+                break;
+            }
 
             let j = transform(b[i], magic, m);
             if used[j] == 0 {
@@ -343,7 +382,9 @@ pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
                 fail = true;
             }
         }
-        if !fail { return magic; }
+        if !fail {
+            return magic;
+        }
     }
     println!("Failed");
 

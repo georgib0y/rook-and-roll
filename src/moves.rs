@@ -28,21 +28,26 @@ movetypes:
 14  queen_promo_cap
  */
 
-use std::fmt::{Display, Formatter, write};
-use crate::Board;
 use crate::move_info::SQ_NAMES;
-use crate::movegen::{B_PROMO_CAP, CAP, DOUBLE, EP, get_piece, get_xpiece, KINGSIDE, N_PROMO_CAP, PROMO, Q_PROMO_CAP, QUEENSIDE, QUIET, R_PROMO_CAP};
+use crate::movegen::{
+    get_piece, get_xpiece, B_PROMO_CAP, CAP, DOUBLE, EP, KINGSIDE, N_PROMO_CAP, PROMO, QUEENSIDE,
+    QUIET, Q_PROMO_CAP, R_PROMO_CAP,
+};
+use crate::Board;
+use std::fmt::{write, Display, Formatter};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Move {
-    m: u32
+    m: u32,
 }
 
 impl Move {
     #[inline]
     pub fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: u32) -> Move {
         //dbg!(from, to, piece, xpiece, move_type);
-        Move { m: from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type }
+        Move {
+            m: from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type,
+        }
     }
 
     #[inline]
@@ -69,11 +74,16 @@ impl Move {
     pub fn move_type(&self) -> u32 {
         self.m & 0xF
     }
-    
+
     #[inline]
     pub fn all(&self) -> (usize, usize, usize, usize, u32) {
-        ( self.from() as usize, self.to() as usize, self.piece() as usize, 
-            self.xpiece() as usize, self.move_type() )
+        (
+            self.from() as usize,
+            self.to() as usize,
+            self.piece() as usize,
+            self.xpiece() as usize,
+            self.move_type(),
+        )
     }
 
     pub fn new_from_text(text: &str, b: &Board) -> Move {
@@ -86,7 +96,7 @@ impl Move {
             None
         };
 
-        let promo_piece= (promo.unwrap_or(12)) as u32;
+        let promo_piece = (promo.unwrap_or(12)) as u32;
 
         let piece = get_piece(b, from);
         let mut xpiece = get_xpiece(b, to);
@@ -98,7 +108,7 @@ impl Move {
         } else if piece == 10 || piece == 11 {
             if (from as i32 - to as i32) == -2 {
                 move_type = KINGSIDE + b.colour_to_move as u32;
-            } else if (from as i32 - to as i32) == 2{
+            } else if (from as i32 - to as i32) == 2 {
                 move_type = QUEENSIDE + b.colour_to_move as u32;
             }
         }
@@ -109,9 +119,8 @@ impl Move {
                 4 | 5 => move_type = R_PROMO_CAP,
                 6 | 7 => move_type = B_PROMO_CAP,
                 8 | 9 => move_type = Q_PROMO_CAP,
-                _=> panic!("promo_piece {promo_piece} not an available promo piece")
+                _ => panic!("promo_piece {promo_piece} not an available promo piece"),
             }
-
         } else if promo_piece < 12 {
             move_type = PROMO;
             xpiece = promo_piece;
@@ -126,16 +135,16 @@ impl Move {
 
     pub fn as_uci_string(&self) -> String {
         let mut m = String::new();
-        
+
         m.push_str(SQ_NAMES[self.from() as usize]);
         m.push_str(SQ_NAMES[self.to() as usize]);
         if self.move_type() > 6 && self.move_type() < 12 {
-            let promo_piece = if self.move_type() == 7 { 
-                self.xpiece() 
-            } else { 
+            let promo_piece = if self.move_type() == 7 {
+                self.xpiece()
+            } else {
                 self.move_type() - 6
             };
-            
+
             m.push_str(&text_from_promo_piece(promo_piece));
         }
         m
@@ -144,10 +153,17 @@ impl Move {
 
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "From: {} ({})\tTo:{} ({})\tPiece: {}\tXPiece: {}\tMove Type: {}",
-               self.from(), SQ_NAMES[self.from() as usize],
-               self.to(), SQ_NAMES[self.to() as usize],
-               self.piece(), self.xpiece(), self.move_type() )
+        write!(
+            f,
+            "From: {} ({})\tTo:{} ({})\tPiece: {}\tXPiece: {}\tMove Type: {}",
+            self.from(),
+            SQ_NAMES[self.from() as usize],
+            self.to(),
+            SQ_NAMES[self.to() as usize],
+            self.piece(),
+            self.xpiece(),
+            self.move_type()
+        )
     }
 }
 
@@ -163,7 +179,7 @@ fn promo_piece_from_text(p: &str) -> usize {
         "r" => 4,
         "b" => 6,
         "q" => 8,
-        _ => 12
+        _ => 12,
     }
 }
 
@@ -173,6 +189,6 @@ fn text_from_promo_piece(promo_piece: u32) -> String {
         4 | 5 => String::from("r"),
         6 | 7 => String::from("b"),
         8 | 9 => String::from("q"),
-        _ => String::from("")
+        _ => String::from(""),
     }
 }

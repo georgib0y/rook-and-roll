@@ -1,10 +1,10 @@
 use simplelog::*;
 
+use crate::eval::MAT_SCORES;
+use crate::{iterative_deepening, Board, Move, SeqTT};
+use log::{error, info};
 use std::io;
 use std::io::{BufWriter, Stdout, Write};
-use log::{error, info};
-use crate::{Board, iterative_deepening, Move, SeqTT};
-use crate::eval::MAT_SCORES;
 
 pub struct Uci {
     author: String,
@@ -37,7 +37,10 @@ impl Uci {
                 self.tt = SeqTT::new();
                 self.board = Board::new();
             } else if buffer.starts_with("uci") {
-                let out = format!("id name {}\nid author {}\nuciok", self.bot_name, self.author);
+                let out = format!(
+                    "id name {}\nid author {}\nuciok",
+                    self.bot_name, self.author
+                );
                 info!(target: "output", "{out}");
                 println!("{}", out);
             } else if buffer.starts_with("isready") {
@@ -62,17 +65,24 @@ impl Uci {
             // split after postition fen ...
             let mut fen = buffer.split_once("fen ").unwrap().1;
             // if there are extra moves afterwards (fen ... moves e3g8 f4f4 ... split before then
-            if fen.contains("moves"){
+            if fen.contains("moves") {
                 fen = fen.split_once(" moves").unwrap().0;
             }
             println!("{fen}");
             Board::new_fen(fen)
-        } else { // if "startpos"
+        } else {
+            // if "startpos"
             Board::new()
         };
 
         if buffer.contains("moves") {
-            let moves: Vec<&str> = buffer.trim().split_once("moves ").unwrap().1.split(' ').collect();
+            let moves: Vec<&str> = buffer
+                .trim()
+                .split_once("moves ")
+                .unwrap()
+                .1
+                .split(' ')
+                .collect();
 
             for m in moves {
                 let mv = Move::new_from_text(m, &self.board);
@@ -86,11 +96,12 @@ impl Uci {
         println!("info string starting search");
         io::stdout().flush().unwrap();
         let best_move = iterative_deepening(&self.board, &mut self.tt);
-        if best_move.is_none() { error!(target: "panic", "Did not find a best move")}
+        if best_move.is_none() {
+            error!(target: "panic", "Did not find a best move")
+        }
         let out = format!("bestmove {}", best_move.unwrap().as_uci_string());
         info!(target: "output", "{out}");
         println!("{out}");
         io::stdout().flush().unwrap();
     }
-
 }
