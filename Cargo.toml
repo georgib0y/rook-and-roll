@@ -9,6 +9,7 @@ edition = "2021"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rand_distr = "0.4.3"
+#rayon = "1.5.3"
 threadpool = "1.8.1"
 lazy_static = "1.4.0"
 log = "0.4.17"
@@ -21,5 +22,5 @@ debug = 2
 
 [profile.release]
 opt-level = 3
-overflow-checks = false
+#overflow-checks = false
 lto = true

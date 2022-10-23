@@ -28,62 +28,56 @@ movetypes:
 14  queen_promo_cap
  */
 
+use std::arch::x86_64::{__m128i, __m256i, _mm256_and_si256, _mm256_broadcastd_epi32, _mm256_extract_epi32, _mm256_set_epi32, _mm256_setzero_si256, _mm256_srav_epi32, _mm_set1_epi32};
 use crate::move_info::SQ_NAMES;
-use crate::movegen::{
-    get_piece, get_xpiece, B_PROMO_CAP, CAP, DOUBLE, EP, KINGSIDE, N_PROMO_CAP, PROMO, QUEENSIDE,
-    QUIET, Q_PROMO_CAP, R_PROMO_CAP,
-};
-use crate::Board;
+use crate::movegen::{B_PROMO_CAP, CAP, DOUBLE, EP, KINGSIDE, N_PROMO_CAP, PROMO, QUEENSIDE, QUIET, Q_PROMO_CAP, R_PROMO_CAP, get_piece, get_xpiece};
+// get_piece, get_xpiece,
+use crate::{Board, MoveList, MoveTables};
 use std::fmt::{write, Display, Formatter};
+use std::mem;
+use crate::board::PIECE_NAMES;
+use crate::movegen::MTYPE_STRS;
+
 
 #[derive(Debug, Copy, Clone)]
-pub struct Move {
-    m: u32,
-}
+pub struct Move(u32);
+
 
 impl Move {
     #[inline]
     pub fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: u32) -> Move {
         //dbg!(from, to, piece, xpiece, move_type);
-        Move {
-            m: from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type,
-        }
+        Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type)
     }
 
     #[inline]
     pub fn from(&self) -> u32 {
-        self.m >> 18
+        self.0 >> 18
     }
 
     #[inline]
     pub fn to(&self) -> u32 {
-        (self.m >> 12) & 0x3F
+        (self.0 >> 12) & 0x3F
     }
 
     #[inline]
     pub fn piece(&self) -> u32 {
-        (self.m >> 8) & 0xF
+        (self.0 >> 8) & 0xF
     }
 
     #[inline]
     pub fn xpiece(&self) -> u32 {
-        (self.m >> 4) & 0xF
+        (self.0 >> 4) & 0xF
     }
 
     #[inline]
     pub fn move_type(&self) -> u32 {
-        self.m & 0xF
+        self.0 & 0xF
     }
 
     #[inline]
     pub fn all(&self) -> (usize, usize, usize, usize, u32) {
-        (
-            self.from() as usize,
-            self.to() as usize,
-            self.piece() as usize,
-            self.xpiece() as usize,
-            self.move_type(),
-        )
+        (self.from() as usize, self.to() as usize, self.piece() as usize, self.xpiece() as usize, self.move_type())
     }
 
     pub fn new_from_text(text: &str, b: &Board) -> Move {
@@ -134,35 +128,56 @@ impl Move {
     }
 
     pub fn as_uci_string(&self) -> String {
-        let mut m = String::new();
+        let mut mv = String::new();
 
-        m.push_str(SQ_NAMES[self.from() as usize]);
-        m.push_str(SQ_NAMES[self.to() as usize]);
-        if self.move_type() > 6 && self.move_type() < 12 {
-            let promo_piece = if self.move_type() == 7 {
-                self.xpiece()
+        let (f,t,p,x,m) = self.all();
+
+        mv.push_str(SQ_NAMES[f]);
+        mv.push_str(SQ_NAMES[t]);
+        if m > 6 && m < 12 {
+            let promo_piece = if m == 7 {
+                x as u32
             } else {
-                self.move_type() - 6
+                m - 6
             };
 
-            m.push_str(&text_from_promo_piece(promo_piece));
+            mv.push_str(&text_from_promo_piece(promo_piece));
         }
-        m
+        mv
     }
+}
+
+// #[derive(Copy, Clone)]
+// struct MoveSimd(u64);
+//
+// impl MoveSimd {
+//     fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: u32) -> MoveSimd {
+//         let m: [u8; 8] = [from as u8, to as u8, piece as u8, xpiece as u8, move_type as u8, 0,0,0];
+//         unsafe { mem::transmute::<[u8;8], MoveSimd>(m) }
+//     }
+//
+//     pub fn all(&self) -> (usize, usize, usize, usize, u32) {
+//         unsafe {
+//             let all = mem::transmute::<MoveSimd, [u8;8]>(*self);
+//             (all[0] as usize, all[1] as usize, all[2] as usize, all[3] as usize, all[4] as u32)
+//         }
+//     }
+// }
+
+#[test]
+fn simd_moving() {
+    let m = Move::new(0, 1, 2, 3, 4);
+    let all = m.all();
+    assert_eq!(all, (0,1,2,3,4) );
 }
 
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (fr,t,p,x,m) = self.all();
+
         write!(
-            f,
-            "From: {} ({})\tTo:{} ({})\tPiece: {}\tXPiece: {}\tMove Type: {}",
-            self.from(),
-            SQ_NAMES[self.from() as usize],
-            self.to(),
-            SQ_NAMES[self.to() as usize],
-            self.piece(),
-            self.xpiece(),
-            self.move_type()
+            f, "From: {} ({})\tTo:{} ({})\tPiece: {} ({})\tXPiece: {} ({})\tMove Type: {} ({})",
+            fr, SQ_NAMES[fr], t, SQ_NAMES[t], p, PIECE_NAMES[p], x, PIECE_NAMES[x], m, MTYPE_STRS[m as usize]
         )
     }
 }

@@ -6,41 +6,51 @@ use rand_chacha::ChaCha20Rng;
 use std::borrow::BorrowMut;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
 use std::sync::RwLock;
+use crate::eval::CHECKMATE;
+use crate::Move;
+use crate::tt::EntryType::PV;
 
 // const TTABLE_SIZE: usize = 10;
 //
 const TTABLE_SIZE: usize = 1 << 20; // 2^20
 const TT_IDX_MASK: u64 = 0xFFFFF;
-
 // const TTABLE_SIZE: usize = 65536; // 2^16
 // const TT_IDX_MASK: u64  = 0xFFFF;
 
-pub const PV_TT_FLAG: u8 = 0;
-pub const ALPHA_TT_FLAG: u8 = 1;
-pub const BETA_TT_FLAG: u8 = 2;
-
 pub const ORDER: Ordering = Ordering::Release;
 
-/*
-TODO
-multithreaded tt table is slower becuase memory is being shared between all cores of the cpu (slow)
+// pub const PV_TT_FLAG: u8 = 0;
+// pub const ALPHA_TT_FLAG: u8 = 1;
+// pub const BETA_TT_FLAG: u8 = 2;
 
-AN idea to minimize this (could be a bad idea but it's MY idea at least):
-    what if each thread searching has its own TTable, which was some sort of slice or subset of
-    a master tt
+#[derive(Debug, Copy, Clone)]
+pub enum EntryType {
+    PV,
+    Alpha,
+    Beta,
+}
 
-    each is likely to encounter the same positions in a localised scale, which is what the tt would
-    be used to minimise
-        (starting out the search, all threads would all have similar positions as well which would
-        be where the master tt would come in to play)
+#[derive(Debug, Copy, Clone)]
+struct TTEntry {
+    hash: u64,
+    score: i32,
+    e_type: EntryType,
+    depth: usize,
+    best: Option<Move>,
+}
 
-    after a search is completed somehow the local tt are the merged into the master tt by some
-    heuristic such as times accessed/age and depth or something
+impl TTEntry {
+    pub fn default() -> TTEntry {
+        TTEntry {
+            hash: 0,
+            score: 0,
+            e_type: EntryType::PV,
+            depth: 0,
+            best: None,
+        }
+    }
+}
 
-    though the size would be an issue, 6/12 cores/threads would be huge if the tt was copied that
-    many times, so then a smaller tt would need to be copied to each thread but how?? and by what???
-
- */
 
 // sequential transposition table
 pub struct SeqTT {
@@ -58,36 +68,70 @@ impl SeqTT {
         }
     }
 
-    pub fn get(&mut self, hash: u64, depth: usize, alpha: i32, beta: i32) -> Option<i32> {
-        if let Some(entry) = self.ttable[(hash & TT_IDX_MASK) as usize] {
+    pub fn get_score(
+        &mut self,
+        hash: u64,
+        depth: usize,
+        alpha: i32,
+        beta: i32,
+        ply: usize
+    ) -> Option<i32> {
+        self.ttable[(hash & TT_IDX_MASK) as usize].and_then(|entry| {
             if entry.hash != hash || entry.depth < depth {
                 return None;
             }
 
-            if entry.e_type == PV_TT_FLAG {
-                Some(entry.score)
-            } else if entry.e_type == ALPHA_TT_FLAG && entry.score <= alpha {
-                Some(alpha)
-            } else if entry.e_type == BETA_TT_FLAG && entry.score >= beta {
-                Some(beta)
+            // if checkmate adjust the score so that it includes the amoiunt of plies up until
+            // this point, the checkmate score should be stored so that it reflects the distance
+            // between the mated node and this current one (not all the way up to the root)
+            let score = if entry.score >= -CHECKMATE {
+                entry.score - ply as i32
+            } else if entry.score <= CHECKMATE {
+                entry.score + ply as i32
             } else {
-                None
+                entry.score
+            };
+
+            match entry.e_type {
+                EntryType::PV => Some(score),
+                EntryType::Alpha => if score <= alpha { Some(score) } else { None },
+                EntryType::Beta => if score >= beta { Some(score) } else { None }
             }
-        } else {
-            None
-        }
+        })
     }
 
-    pub fn insert(&mut self, hash: u64, score: i32, e_type: u8, depth: usize) {
-        let entry = TTEntry {
+    #[inline]
+    pub fn get_best(&mut self, hash: u64) -> Option<Move> {
+        self.ttable[(hash & TT_IDX_MASK) as usize].and_then(|entry| entry.best)
+    }
+
+    pub fn insert(
+        &mut self,
+        hash: u64,
+        score: i32,
+        e_type: EntryType,
+        depth: usize,
+        best: Option<Move>,
+        ply: usize
+    ) {
+        // if checkmate make the score only the distance between this node and the checkmate
+        // as opposed to the checkmate from the root
+        let score = if score >= -CHECKMATE { score + ply as i32 }
+            else if score <= CHECKMATE { score - ply as i32 }
+            else { score };
+
+        self.ttable[(hash & TT_IDX_MASK) as usize] = Some(TTEntry {
             hash,
             score,
             e_type,
             depth,
-        };
-        self.ttable[(hash & TT_IDX_MASK) as usize] = Some(entry);
+            best
+        });
     }
 }
+
+
+
 
 // parallel transposition table
 pub struct AtomicTT {
@@ -124,24 +168,7 @@ impl AtomicTT {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct TTEntry {
-    hash: u64,
-    score: i32,
-    e_type: u8,
-    depth: usize,
-}
 
-impl TTEntry {
-    pub fn default() -> TTEntry {
-        TTEntry {
-            hash: 0,
-            score: 0,
-            e_type: PV_TT_FLAG,
-            depth: 0,
-        }
-    }
-}
 
 struct AtomicTTEntry {
     hash: AtomicU64,
@@ -150,12 +177,12 @@ struct AtomicTTEntry {
 }
 
 impl AtomicTTEntry {
-    pub fn default() -> TTEntry {
-        TTEntry {
-            hash: 0,
-            score: 0,
-            e_type: PV_TT_FLAG,
-            depth: 0,
+    pub fn default() -> AtomicTTEntry {
+        AtomicTTEntry {
+            hash: AtomicU64::new(0),
+            score: AtomicI32::new(0),
+            e_type: AtomicU8::new(0),
+
         }
     }
 

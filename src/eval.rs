@@ -8,7 +8,7 @@ const PAWN_VALUE: i32 = 100;
 const KNIGHT_VALUE: i32 = 320;
 const ROOK_VALUE: i32 = 500;
 const BISHOP_VALUE: i32 = 350;
-const QUEEN_VALUE: i32 = 900;
+pub const QUEEN_VALUE: i32 = 900;
 const KING_VALUE: i32 = 20000;
 
 pub const MAT_SCORES: [i32; 12] = [
@@ -30,35 +30,37 @@ pub const MAT_SCORES: [i32; 12] = [
 
 pub fn eval(b: &Board, colour_mul: i32) -> i32 {
     let mut eval = 0;
-    eval += b.mat_value;
-    eval += eval_pst(b);
+    eval += b.value;
+    // TODO lazy eval, check for beta cutoff after every eval function
+    // eval += eval_pst(b);
 
     eval * colour_mul
 }
 
-pub fn eval_pst(b: &Board) -> i32 {
+pub fn gen_pst_value(board: &Board) -> i32 {
     let mut pos = 0;
 
-    for piece in (0..=10).step_by(2) {
-        let mut w_piece = b.pieces[piece];
+    [(0 , 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11)].iter()
+        .for_each(|(w, b)| {
+        let mut w_piece = board.pieces[*w];
         while w_piece > 0 {
             let sq = w_piece.trailing_zeros() as usize;
-            pos += PST[piece][sq] as i32;
+            pos += PST[*w][sq] as i32;
             w_piece &= w_piece - 1;
         }
 
-        let mut b_piece = b.pieces[piece + 1];
+        let mut b_piece = board.pieces[*b];
         while b_piece > 0 {
             let sq = b_piece.trailing_zeros() as usize;
-            pos -= PST[piece + 1][sq] as i32;
+            pos -= PST[*b][sq] as i32;
             b_piece &= b_piece - 1;
         }
-    }
+    });
 
     pos
 }
 
-pub fn gen_mat_value(b: Board) -> i32 {
+pub fn gen_mat_value(b: &Board) -> i32 {
     let mut mat = b.pieces[0].count_ones() as i32 * PAWN_VALUE;
     mat -= b.pieces[1].count_ones() as i32 * PAWN_VALUE;
 
@@ -75,4 +77,15 @@ pub fn gen_mat_value(b: Board) -> i32 {
     mat -= b.pieces[9].count_ones() as i32 * QUEEN_VALUE;
 
     mat
+}
+
+
+#[test]
+fn pst_symm() {
+    for (w, b) in PST.iter().step_by(2).zip(PST.iter().skip(1).step_by(2)) {
+        let fwd: Vec<&i8> = w.iter().collect();
+        let bkw: Vec<&i8> = b.iter().rev().collect();
+
+        assert_eq!(fwd, bkw);
+    }
 }

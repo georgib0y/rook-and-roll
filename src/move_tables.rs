@@ -17,6 +17,7 @@ lazy_static! {
 pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
 
+#[derive(Clone)]
 pub struct MoveTables {
     pub pawn_attacks: Box<[[u64; 64]]>,
     pub knight_moves: Box<[u64]>,
@@ -172,8 +173,8 @@ fn gen_bishop_move_table() -> Box<[[u64; 512]]> {
 
 fn gen_superray() -> Box<[u64]> {
     let mut superray = vec![0; 64];
-    for sq in 0..64 {
-        superray[sq] = RAYS[0][sq]
+    for (sq, sray) in superray.iter_mut().enumerate().take(64){
+        *sray = RAYS[0][sq]
             | RAYS[1][sq]
             | RAYS[2][sq]
             | RAYS[3][sq]

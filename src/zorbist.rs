@@ -100,8 +100,8 @@ impl Zorb {
 
 fn gen_piece_array(rand: &mut ChaCha20Rng) -> [u64; 64] {
     let mut rand_array = [0; 64];
-    for i in 0..64 {
-        rand_array[i] = rand.gen::<u64>();
+    for r in &mut rand_array {
+        *r = rand.gen::<u64>();
     }
     rand_array
 }
@@ -116,8 +116,8 @@ fn gen_castle_array(rand: &mut ChaCha20Rng) -> [u64; 4] {
 
 fn gen_ep_file_array(rand: &mut ChaCha20Rng) -> [u64; 8] {
     let mut rand_array = [0; 8];
-    for i in 0..8 {
-        rand_array[i] = rand.gen::<u64>();
+    for r in &mut rand_array {
+        *r = rand.gen::<u64>();
     }
     rand_array
 }

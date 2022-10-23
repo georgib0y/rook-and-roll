@@ -1,7 +1,7 @@
 #![allow(unused)]
 
-use crate::eval::{gen_mat_value, MAT_SCORES};
-use crate::move_info::SQUARES;
+use crate::eval::{gen_mat_value, gen_pst_value, MAT_SCORES};
+use crate::move_info::{PST, SQUARES};
 use crate::movegen::*;
 use crate::moves::Move;
 use crate::zorbist::Zorb;
@@ -15,6 +15,8 @@ pub const BISHOP: usize = 6;
 pub const QUEEN: usize = 8;
 pub const KING: usize = 10;
 
+pub const PIECE_NAMES: [&str; 12] = ["P", "p", "N", "n", "R", "r", "B", "b", "Q", "q", "K", "k"];
+
 // 0 - white to move, 1 - black to move
 
 #[derive(Copy, Clone)]
@@ -26,7 +28,7 @@ pub struct Board {
     pub ep: usize,
     pub halfmove: usize,
     pub hash: u64,
-    pub mat_value: i32,
+    pub value: i32,
 }
 
 impl Board {
@@ -61,11 +63,11 @@ impl Board {
             ep: 64,
             halfmove: 0,
             hash: 0,
-            mat_value: 0,
+            value: 0,
         };
 
         board.hash = gen_hash(board);
-        board.mat_value = gen_mat_value(board);
+        board.value = gen_mat_value(&board) + gen_pst_value(&board);
 
         board
     }
@@ -181,7 +183,7 @@ impl Board {
 
         // regen the hash after everything is finished
         b.hash = gen_hash(b);
-        b.mat_value = gen_mat_value(b);
+        b.value = gen_mat_value(&b) + gen_pst_value(&b);
 
         b
     }
@@ -190,15 +192,13 @@ impl Board {
     // TODO also perf seems to drop a lot for not that many lines, could just be the zorb arr tho
 
     pub fn copy_make(&self, m: &Move) -> Board {
-        // copy board
-        // let mut b = *self;
-        // let mut b = self.clone();
-
         // get info from board
         let (from, to, piece, xpiece, move_type) = m.all();
-
-        // flip from and to bits on relevant boards
         let ft = SQUARES[from] | SQUARES[to];
+
+        let mut hash = self.hash;
+        hash ^= Zorb::piece(piece, from);
+        hash ^= Zorb::piece(piece, to);
 
         let mut pieces = self.pieces;
         pieces[piece] ^= ft;
@@ -208,20 +208,17 @@ impl Board {
         util[2] ^= ft;
 
         // toggle ep file if there is one
-
-        let mut hash = self.hash;
-
         if self.ep < 64 {
             hash ^= Zorb::ep_file(self.ep);
         }
         let mut ep = 64;
 
-        hash ^= Zorb::piece(piece, from);
-        hash ^= Zorb::piece(piece, to);
-
         let mut halfmove = self.halfmove + 1;
 
-        let mut mat_value = self.mat_value;
+        let mut value = self.value + (-PST[piece][from] + PST[piece][to]) as i32;
+
+        // TODO inc update pst values
+
         match move_type {
             // (piece > 1) as usize == 1 if piece not pawn, so halfmove*1, if pawn halfmove*0 == 0
             QUIET => halfmove *= (piece > 1) as usize,
@@ -235,42 +232,19 @@ impl Board {
                 util[self.colour_to_move ^ 1] ^= SQUARES[to];
                 util[2] ^= SQUARES[to];
 
-                mat_value -= MAT_SCORES[xpiece];
+                value -= MAT_SCORES[xpiece] + PST[xpiece][to] as i32;
+
                 hash ^= Zorb::piece(xpiece, to);
                 halfmove = 0;
             }
-            WKINGSIDE => {
-                pieces[4] ^= SQUARES[7] | SQUARES[5];
-                util[0] ^= SQUARES[7] | SQUARES[5];
-                util[2] ^= SQUARES[7] | SQUARES[5];
-
-                hash ^= Zorb::piece(4, 7);
-                hash ^= Zorb::piece(4, 5);
-            }
-            BKINGSIDE => {
-                pieces[5] ^= SQUARES[63] | SQUARES[61];
-                util[1] ^= SQUARES[63] | SQUARES[61];
-                util[2] ^= SQUARES[63] | SQUARES[61];
-
-                hash ^= Zorb::piece(5, 63);
-                hash ^= Zorb::piece(5, 61);
-            }
-            WQUEENSIDE => {
-                pieces[4] ^= SQUARES[0] | SQUARES[3];
-                util[0] ^= SQUARES[0] | SQUARES[3];
-                util[2] ^= SQUARES[0] | SQUARES[3];
-
-                hash ^= Zorb::piece(4, 0);
-                hash ^= Zorb::piece(4, 3);
-            }
-            BQUEENSIDE => {
-                pieces[5] ^= SQUARES[56] | SQUARES[59];
-                util[1] ^= SQUARES[56] | SQUARES[59];
-                util[2] ^= SQUARES[56] | SQUARES[59];
-
-                hash ^= Zorb::piece(5, 56);
-                hash ^= Zorb::piece(5, 59);
-            }
+            WKINGSIDE =>
+                update_castling(&mut pieces, &mut util, 0, 5, 7, &mut hash, &mut value),
+            BKINGSIDE =>
+                update_castling(&mut pieces, &mut util, 1, 61, 63, &mut hash, &mut value),
+            WQUEENSIDE =>
+                update_castling(&mut pieces, &mut util, 0, 0, 3, &mut hash, &mut value),
+            BQUEENSIDE =>
+                update_castling(&mut pieces, &mut util, 1, 56, 59, &mut hash, &mut value),
             PROMO => {
                 pieces[self.colour_to_move] ^= SQUARES[to];
                 pieces[xpiece] ^= SQUARES[to];
@@ -278,7 +252,8 @@ impl Board {
                 hash ^= Zorb::piece(piece, to);
                 hash ^= Zorb::piece(xpiece, to);
 
-                mat_value += MAT_SCORES[xpiece];
+                value += -MAT_SCORES[piece] + MAT_SCORES[xpiece];
+                value += (-PST[piece][to] + PST[xpiece][to]) as i32;
                 halfmove = 0;
             }
             N_PROMO_CAP | R_PROMO_CAP | B_PROMO_CAP | Q_PROMO_CAP => {
@@ -301,7 +276,8 @@ impl Board {
                 hash ^= Zorb::piece(xpiece, to);
 
                 // update mat value (the promo piece - the captured piece and the pre-promoted piece)
-                mat_value += MAT_SCORES[promo_piece] - MAT_SCORES[xpiece] - MAT_SCORES[piece];
+                value += MAT_SCORES[promo_piece] - MAT_SCORES[xpiece] - MAT_SCORES[piece];
+                value += (-PST[xpiece][to] - PST[piece][to] + PST[promo_piece][to]) as i32;
                 halfmove = 0;
             }
             EP => {
@@ -310,53 +286,79 @@ impl Board {
                 util[2] ^= SQUARES[to - 8 + (self.colour_to_move * 16)];
                 hash ^= Zorb::piece(xpiece, to - 8 + (self.colour_to_move * 16));
 
-                mat_value -= MAT_SCORES[xpiece];
+                value -= MAT_SCORES[xpiece] + PST[xpiece][to] as i32;
                 halfmove = 0;
             }
             _ => panic!("Move type: {move_type}, outside of range!"),
         }
 
-        let mut castle_state = self.castle_state;
-        match piece {
-            10 => {
-                if (from == 7 || to == 7) && castle_state & 0b1000 > 0 {
-                    castle_state &= 0b0111;
-                    hash ^= Zorb::castle_rights(0);
-                }
-                if (from == 0 || to == 0) && castle_state & 0b100 > 0 {
-                    castle_state &= 0b1011;
-                    hash ^= Zorb::castle_rights(1);
-                }
-            }
-            11 => {
-                if (from == 63 || to == 63) && castle_state & 0b10 > 0 {
-                    castle_state &= 0b1101;
-                    hash ^= Zorb::castle_rights(2);
-                }
-                if (from == 56 || to == 56) && castle_state & 0b1 > 0 {
-                    castle_state &= 0b1110;
-                    hash ^= Zorb::castle_rights(3);
-                }
-            }
-            _ => {}
-        }
+        let castle_state = update_castle_state(from, to, piece, self.castle_state, &mut hash);
 
         hash ^= Zorb::colour();
 
         Board {
-            pieces,
-            util,
+            pieces, util,
             colour_to_move: self.colour_to_move ^ 1,
             castle_state,
             ep,
             halfmove,
             hash,
-            mat_value
+            value
         }
     }
 }
 
+fn update_castling(
+    pieces: &mut [u64;12],
+    util: &mut [u64;3],
+    colour: usize,
+    from: usize,
+    to: usize,
+    hash: &mut u64,
+    value: &mut i32
+) {
+    let sqs = SQUARES[from] | SQUARES[to];
+    pieces[ROOK + colour] ^= sqs;
+    util[colour] ^= sqs;
+    util[2] ^= sqs;
 
+    *value += (-PST[ROOK + colour][from] + PST[ROOK + colour][to]) as i32;
+
+    *hash ^= Zorb::piece(ROOK + colour, from);
+    *hash ^= Zorb::piece(ROOK + colour, to);
+}
+
+fn update_castle_state(
+    from: usize,
+    to: usize,
+    piece: usize,
+    mut castle_state: u8,
+    hash: &mut u64
+) -> u8 {
+    // stop thinking you can optimise this you have the ifs for the hash
+    if (piece == 10 || from == 7 || to == 7) && castle_state & 0b1000 > 0 {
+        castle_state &= 0b0111;
+        *hash ^= Zorb::castle_rights(0);
+    }
+
+    if (piece == 10 || from == 0 || to == 0) && castle_state & 0b100 > 0 {
+        castle_state &= 0b1011;
+        *hash ^= Zorb::castle_rights(1);
+    }
+
+    if (piece == 11 || from == 63 || to == 63) && castle_state & 0b10 > 0 {
+        castle_state &= 0b1101;
+        *hash ^= Zorb::castle_rights(2);
+    }
+
+    if (piece == 11 || from == 56 || to == 56) && castle_state & 0b1 > 0 {
+        castle_state &= 0b1110;
+        *hash ^= Zorb::castle_rights(3);
+    }
+
+    castle_state
+
+}
 
 
 
@@ -369,44 +371,44 @@ impl fmt::Display for Board {
             let s = i.to_string();
             out.push_str(&s);
             out.push_str("    ");
-            for j in i * 8 - 8..i * 8 {
-                if (SQUARES[j] & self.pieces[0]) > 0 {
+            for sq in SQUARES.iter().take(8).skip(i * 8 - 8) {
+                if (sq & self.pieces[0]) > 0 {
                     out.push_str("P ");
                 }
-                if (SQUARES[j] & self.pieces[1]) > 0 {
+                if (sq & self.pieces[1]) > 0 {
                     out.push_str("p ");
                 }
-                if (SQUARES[j] & self.pieces[2]) > 0 {
+                if (sq & self.pieces[2]) > 0 {
                     out.push_str("N ");
                 }
-                if (SQUARES[j] & self.pieces[3]) > 0 {
+                if (sq & self.pieces[3]) > 0 {
                     out.push_str("n ");
                 }
-                if (SQUARES[j] & self.pieces[4]) > 0 {
+                if (sq & self.pieces[4]) > 0 {
                     out.push_str("R ");
                 }
-                if (SQUARES[j] & self.pieces[5]) > 0 {
+                if (sq & self.pieces[5]) > 0 {
                     out.push_str("r ");
                 }
-                if (SQUARES[j] & self.pieces[6]) > 0 {
+                if (sq & self.pieces[6]) > 0 {
                     out.push_str("B ");
                 }
-                if (SQUARES[j] & self.pieces[7]) > 0 {
+                if (sq & self.pieces[7]) > 0 {
                     out.push_str("b ");
                 }
-                if (SQUARES[j] & self.pieces[8]) > 0 {
+                if (sq & self.pieces[8]) > 0 {
                     out.push_str("Q ");
                 }
-                if (SQUARES[j] & self.pieces[9]) > 0 {
+                if (sq & self.pieces[9]) > 0 {
                     out.push_str("q ");
                 }
-                if (SQUARES[j] & self.pieces[10]) > 0 {
+                if (sq & self.pieces[10]) > 0 {
                     out.push_str("K ");
                 }
-                if (SQUARES[j] & self.pieces[11]) > 0 {
+                if (sq & self.pieces[11]) > 0 {
                     out.push_str("k ");
                 }
-                if (SQUARES[j] & self.util[2]) == 0 {
+                if (sq & self.util[2]) == 0 {
                     out.push_str("- ");
                 }
             }
@@ -421,9 +423,9 @@ fn gen_hash(board: Board) -> u64 {
     let mut hash = 0;
 
     for piece in 0..12 {
-        for sq in 0..64 {
-            if (board.pieces[piece] & SQUARES[sq]) > 0 {
-                hash ^= Zorb::piece(piece, sq);
+        for (i, sq) in SQUARES.iter().enumerate().take(64) {
+            if (board.pieces[piece] & sq) > 0 {
+                hash ^= Zorb::piece(piece, i);
             }
         }
     }
@@ -453,6 +455,15 @@ fn gen_hash(board: Board) -> u64 {
     hash
 }
 
+#[macro_export]
+macro_rules! print_bb {
+    ( $( $args:expr ),* ) => {
+        {
+            $( print_bb($args); )*
+        }
+    };
+}
+
 pub fn print_bb(bb: u64) {
     let mut out = String::new();
 
@@ -460,8 +471,8 @@ pub fn print_bb(bb: u64) {
         out.push_str(&i.to_string());
         out.push(' ');
 
-        for j in i * 8 - 8..i * 8 {
-            if SQUARES[j] & bb > 0 {
+        for sq in SQUARES.iter().take(8).skip(i * 8 - 8) {
+            if sq & bb > 0 {
                 out.push_str(" X ");
             } else {
                 out.push_str(" - ");
@@ -470,62 +481,6 @@ pub fn print_bb(bb: u64) {
         out.push('\n');
     }
     out.push_str("   A  B  C  D  E  F  G  H\n");
-
-    println!("{}", out);
-}
-
-pub fn print_bb_over_board(m: u64, b: &Board) {
-    let mut out = String::new();
-
-    for i in (1..9).rev() {
-        let s = i.to_string();
-        out.push_str(&s);
-        out.push_str("   ");
-
-        for j in i * 8 - 8..i * 8 {
-            if (SQUARES[j] & m) > 0 {
-                out.push('(');
-            } else {
-                out.push(' ');
-            }
-
-            if (SQUARES[j] & b.pieces[0]) > 0 {
-                out.push('P');
-            } else if (SQUARES[j] & b.pieces[1]) > 0 {
-                out.push('p');
-            } else if (SQUARES[j] & b.pieces[2]) > 0 {
-                out.push('N');
-            } else if (SQUARES[j] & b.pieces[3]) > 0 {
-                out.push('n');
-            } else if (SQUARES[j] & b.pieces[4]) > 0 {
-                out.push('R');
-            } else if (SQUARES[j] & b.pieces[5]) > 0 {
-                out.push('r');
-            } else if (SQUARES[j] & b.pieces[6]) > 0 {
-                out.push('B');
-            } else if (SQUARES[j] & b.pieces[7]) > 0 {
-                out.push('b');
-            } else if (SQUARES[j] & b.pieces[8]) > 0 {
-                out.push('Q');
-            } else if (SQUARES[j] & b.pieces[9]) > 0 {
-                out.push('q');
-            } else if (SQUARES[j] & b.pieces[10]) > 0 {
-                out.push('K');
-            } else if (SQUARES[j] & b.pieces[11]) > 0 {
-                out.push('k');
-            } else {
-                out.push('-');
-            }
-
-            if (SQUARES[j] & m) > 0 {
-                out.push(')');
-            } else {
-                out.push(' ');
-            }
-        }
-        out.push('\n');
-    }
-    out.push_str("\n     A  B  C  D  E  F  G  H\n");
 
     println!("{}", out);
 }

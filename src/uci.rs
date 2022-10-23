@@ -1,7 +1,7 @@
 use simplelog::*;
 
 use crate::eval::MAT_SCORES;
-use crate::{iterative_deepening, Board, Move, SeqTT};
+use crate::{Search, Board, Move, SeqTT, MoveTables};
 use log::{error, info};
 use std::io;
 use std::io::{BufWriter, Stdout, Write};
@@ -10,6 +10,7 @@ pub struct Uci {
     author: String,
     bot_name: String,
     tt: SeqTT,
+    mt: MoveTables,
     board: Board,
 }
 
@@ -19,6 +20,7 @@ impl Uci {
             author: String::from(author),
             bot_name: String::from(bot_name),
             tt: SeqTT::new(),
+            mt: MoveTables::new(),
             board: Board::new(),
         }
     }
@@ -95,7 +97,7 @@ impl Uci {
         info!(target: "output", "info string starting search");
         println!("info string starting search");
         io::stdout().flush().unwrap();
-        let best_move = iterative_deepening(&self.board, &mut self.tt);
+        let best_move = Search::new(&self.mt, &mut self.tt).iterative_deepening(&self.board);
         if best_move.is_none() {
             error!(target: "panic", "Did not find a best move")
         }
