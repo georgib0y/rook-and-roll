@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 

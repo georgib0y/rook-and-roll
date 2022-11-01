@@ -1,9 +1,11 @@
 use crate::board::{Board, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK};
 use crate::move_info::{FA, FH, R1, R2, R3, R6, R7, R8, SQUARES};
 // use crate::move_tables::MT;
-use crate::moves::Move;
+use crate::moves::{KillerMoves, Move, PrevMoves};
 use crate::{print_bb, MoveTables};
 use std::cmp::{max, min};
+use crate::eval::PIECE_VALUES;
+use crate::tt::SeqTT;
 // use crate::movegen::{gen_attacks, get_xpiece};
 
 pub const QUIET: u32 = 0;
@@ -30,25 +32,66 @@ pub const MTYPE_STRS: [&str; 13] = ["QUIET", "DOUBLE", "CAP", "WKINGSIDE", "BKIN
 const ALL_SQUARES: u64 = u64::MAX;
 const NO_SQUARES: u64 = 0;
 
+pub const CAP_SCORE_OFFSET: i32 = 100000;
+
 pub struct MoveList <'a> {
     pub moves: Vec<Move>,
+    scores: Vec<i32>,
     board: &'a Board,
     mt: &'a MoveTables,
-    idx: usize,
+    best_move: Option<Move>,
 }
 
 impl <'a> MoveList <'a> {
-    pub fn new(board: &'a Board, mt: &'a MoveTables, capacity: usize) -> MoveList<'a> {
-        MoveList { board, mt, moves: Vec::with_capacity(capacity), idx: 0 }
+    pub fn new(
+        board: &'a Board,
+        mt: &'a MoveTables,
+        move_capacity: usize,
+        score_capacity: usize,
+    ) -> MoveList<'a> {
+        MoveList {
+            board,
+            mt,
+            moves: Vec::with_capacity(move_capacity),
+            scores: Vec::with_capacity(score_capacity),
+            best_move: None,
+        }
+    }
+
+    pub fn all_scored(
+        board: &'a Board,
+        check: bool,
+        mt: &'a MoveTables,
+        tt: &SeqTT,
+        km: &KillerMoves,
+        depth: usize
+    ) -> MoveList<'a> {
+        let mut move_list;
+
+        if check {
+            move_list = MoveList::new(board, mt,75, 75);
+            move_list.best_move = tt.get_best(board.hash);
+
+            move_list.gen_check()
+        } else {
+            move_list = MoveList::new(board, mt,220, 220);
+            move_list.best_move = tt.get_best(board.hash);
+
+            move_list.gen_attacks(NO_SQUARES, ALL_SQUARES, false);
+            move_list.gen_quiet(NO_SQUARES, ALL_SQUARES, false);
+        };
+
+        move_list.score_moves(km, depth);
+        move_list
     }
 
     pub fn all(board: &'a Board, mt: &'a MoveTables, check: bool) -> MoveList<'a> {
         let mut move_list;
         if check {
-            move_list = MoveList::new(board, mt,75);
+            move_list = MoveList::new(board, mt,75, 0);
             move_list.gen_check()
         } else {
-            move_list = MoveList::new(board, mt,220);
+            move_list = MoveList::new(board, mt,220, 0);
             move_list.gen_attacks(NO_SQUARES, ALL_SQUARES, false);
             move_list.gen_quiet(NO_SQUARES, ALL_SQUARES, false);
         };
@@ -57,16 +100,24 @@ impl <'a> MoveList <'a> {
     }
 
     pub fn attacks(board: &'a Board, mt: &'a MoveTables) -> MoveList<'a> {
-        let mut move_list = MoveList::new(board, mt,100);
+        let mut move_list = MoveList::new(board, mt,100, 0);
         move_list.gen_attacks(NO_SQUARES, ALL_SQUARES, false);
         move_list
     }
 
+    fn attacks_see(board: &'a Board, mt: &'a MoveTables, sq: u64) -> MoveList<'a> {
+        let mut move_list = MoveList::new(board, mt,10, 0);
+        move_list.gen_attacks(NO_SQUARES, sq, false);
+        move_list
+    }
+
     pub fn checks(board: &'a Board, mt: &'a MoveTables) -> MoveList <'a> {
-        let mut move_list = MoveList::new(board, mt, 75);
+        let mut move_list = MoveList::new(board, mt, 75, 0);
         move_list.gen_check();
         move_list
     }
+
+
 
     fn gen_attacks(&mut self, pinned: u64, target: u64, check: bool) {
         if self.board.colour_to_move == 0 {
@@ -155,10 +206,11 @@ impl <'a> MoveList <'a> {
         self.add_pawn_attack_promo(up_rights & R7, 9);
 
         let ep = self.board.ep as u32;
-        if ep < 64 && SQUARES[ep as usize] & (pawns & !FA) << 7 > 0 {
-            self.moves.push(Move::new(ep - 7, ep, 0, 1, EP));
-        } else if ep < 64 && SQUARES[ep as usize] & ((pawns & !FH) << 9) > 0 {
-            self.moves.push(Move::new(ep - 9, ep, 0, 1, EP));
+        if ep < 64 && SQUARES[ep as usize] & ((pawns & !FA) << 7) & target << 8 > 0 {
+            self.add_move(Move::new(ep - 7, ep, 0, 1, EP));
+        }
+        if ep < 64 && SQUARES[ep as usize] & ((pawns & !FH) << 9) & target << 8 > 0 {
+            self.add_move(Move::new(ep - 9, ep, 0, 1, EP));
         }
     }
 
@@ -185,10 +237,11 @@ impl <'a> MoveList <'a> {
         self.add_pawn_attack_promo(down_lefts & R2, -9);
 
         let ep = self.board.ep as u32;
-        if ep < 64 && SQUARES[ep as usize] & ((pawns & !FH) >> 7) > 0 {
-            self.moves.push(Move::new(ep + 7, ep, 1, 0, EP));
-        } else if ep < 64 && SQUARES[ep as usize] & ((pawns & !FA) >> 9) > 0 {
-            self.moves.push(Move::new(ep + 9, ep, 1, 0, EP));
+        if ep < 64 && SQUARES[ep as usize] & ((pawns & !FH) >> 7) & target >> 8 > 0 {
+            self.add_move(Move::new(ep + 7, ep, 1, 0, EP));
+        }
+        if ep < 64 && SQUARES[ep as usize] & ((pawns & !FA) >> 9) & target >> 8 > 0 {
+            self.add_move(Move::new(ep + 9, ep, 1, 0, EP));
         }
     }
 
@@ -316,12 +369,12 @@ impl <'a> MoveList <'a> {
 
         if kingside > 0 && self.board.util[2] & (0x60<<(self.board.colour_to_move*56)) == 0 {
             let move_type = KINGSIDE + self.board.colour_to_move as u32;
-            self.moves.push(Move::new(from,from+2,piece as u32,0,move_type))
+            self.add_move(Move::new(from,from+2,piece as u32,0,move_type))
         }
 
         if queenside > 0 && self.board.util[2] & (0xE<<(self.board.colour_to_move*56)) == 0 {
             let move_type = QUEENSIDE + self.board.colour_to_move as u32;
-            self.moves.push(Move::new(from,from-2,piece as u32,0,move_type))
+            self.add_move(Move::new(from,from-2,piece as u32,0,move_type))
         }
     }
 
@@ -370,7 +423,7 @@ impl <'a> MoveList <'a> {
         while pawns > 0 {
             let from = pawns.trailing_zeros();
             let to = (from as i32 + to_diff) as u32;
-            self.moves.push(Move::new(from, to,piece,0,move_type));
+            self.add_move(Move::new(from, to,piece,0,move_type));
             pawns &= pawns-1;
         }
     }
@@ -380,8 +433,8 @@ impl <'a> MoveList <'a> {
         while pawns > 0 {
             let from = pawns.trailing_zeros();
             let to = (from as i32 + to_diff) as u32;
-            for xpiece in [8,4,2,6] {
-                self.moves.push(Move::new(from, to, piece, xpiece, PROMO));
+            for xpiece in [QUEEN as u32,KNIGHT as u32,ROOK as u32,BISHOP as u32] {
+                self.add_move(Move::new(from, to, piece, xpiece + piece, PROMO));
             }
             pawns &= pawns-1;
         }
@@ -393,7 +446,7 @@ impl <'a> MoveList <'a> {
             let from = pawns.trailing_zeros();
             let to = (from as i32 + to_diff) as u32;
             let xpiece = get_xpiece(self.board, to);
-            self.moves.push(Move::new(from, to, piece, xpiece, CAP));
+            self.add_move(Move::new(from, to, piece, xpiece, CAP));
             pawns &= pawns-1;
         }
     }
@@ -408,7 +461,7 @@ impl <'a> MoveList <'a> {
             let to = (from as i32 + to_diff) as u32;
             let xpiece = get_xpiece(self.board, to);
             for promo_cap in [Q_PROMO_CAP,R_PROMO_CAP,N_PROMO_CAP,B_PROMO_CAP] {
-                self.moves.push(Move::new(from, to, piece, xpiece, promo_cap));
+                self.add_move(Move::new(from, to, piece, xpiece, promo_cap));
             }
             pawns &= pawns-1;
         }
@@ -417,7 +470,7 @@ impl <'a> MoveList <'a> {
     fn add_quiet(&mut self, mut quiet: u64, from: u32, piece: u32) {
         while quiet > 0 {
             let to = quiet.trailing_zeros();
-            self.moves.push(Move::new(from, to, piece, 0, QUIET));
+            self.add_move(Move::new(from, to, piece, 0, QUIET));
             quiet &= quiet-1;
         }
     }
@@ -426,7 +479,7 @@ impl <'a> MoveList <'a> {
         while attack > 0 {
             let to = attack.trailing_zeros();
             let xpiece = get_xpiece(self.board, to);
-            self.moves.push(Move::new(from, to, piece, xpiece, CAP));
+            self.add_move(Move::new(from, to, piece, xpiece, CAP));
             attack &= attack-1;
         }
     }
@@ -511,6 +564,127 @@ impl <'a> MoveList <'a> {
 
         self.mt.rays[dir][lower] & (SQUARES[higher]-1)
     }
+
+    #[inline]
+    fn add_move(&mut self, m: Move) { self.moves.push(m); }
+
+    fn score_moves(&mut self, km: &KillerMoves, depth: usize) {
+        for m in &self.moves {
+            self.scores.push(self.score_move(*m, km, depth))
+        }
+    }
+
+    fn score_move(&self, m: Move, km: &KillerMoves, depth: usize) -> i32 {
+        if Some(m) == self.best_move {
+            return i32::MAX;
+        } else if let Some(score) = km.get_move(m, depth) {
+            return score
+        }
+
+        let mut score = 0;
+        match m.move_type() {
+            QUIET | DOUBLE | WKINGSIDE | BKINGSIDE | WQUEENSIDE | BQUEENSIDE | PROMO | EP => {
+                score = m.piece() as i32;
+            }
+            CAP | N_PROMO_CAP | R_PROMO_CAP | B_PROMO_CAP | Q_PROMO_CAP => {
+                score = self.see(m) + CAP_SCORE_OFFSET;
+            }
+            _ => panic!("Unknown movetype {}", m.move_type())
+        }
+
+        score
+    }
+
+    fn see_get_least_valuable(&self, attackers: u64, colour: usize) -> (usize, u64) {
+        let piece_iter = self.board.pieces.iter()
+            .enumerate()
+            .skip(colour)
+            .step_by(2);
+
+        for (piece, pieces) in piece_iter {
+            let p_in_attackers = *pieces & attackers;
+            if p_in_attackers > 0 {
+                return (piece, p_in_attackers & p_in_attackers.wrapping_neg());
+            }
+        }
+
+        (12, NO_SQUARES)
+    }
+
+    fn see(&self, m: Move) -> i32 {
+        // trying to understand the https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
+        // def using dynamic programming.
+
+        let mut gain: [i32; 32] = [0;32];
+        let mut depth = 0;
+
+        let (from, to, mut piece, xpiece, _) = m.all();
+
+        // froms is a bb of the next possible piece to move that attacks the to square
+        let mut from_piece = SQUARES[from];
+        let mut occ = self.board.util[2];
+        let mut attackers = get_all_attackers(self.board, self.mt, to);
+
+        // can_xray is just all pieces that arent knights
+        // as there is no sliding piece that can be behind a knight that could attack the target
+        let can_xray = occ ^ self.board.pieces[KNIGHT] ^ self.board.pieces[KNIGHT+1];
+
+        gain[depth] = PIECE_VALUES[xpiece];
+
+        while from_piece > 0 {
+            depth += 1;
+
+            // add this score into the and cut off if it cannot increase the score
+            gain[depth] = PIECE_VALUES[piece] - gain[depth-1];
+            if max(-gain[depth-1], gain[depth]) < 0 { break; }
+
+            // remove this attacker
+            attackers ^= from_piece;
+            occ ^= from_piece;
+
+            // recheck if there are any sliding pieces behind this attacker
+            if from_piece & can_xray > 0 {
+                attackers |= occ & get_all_attackers(self.board, self.mt, to);
+            }
+
+            (piece, from_piece) = self.see_get_least_valuable(
+                attackers,
+                self.board.colour_to_move ^ (depth & 1)
+            );
+        }
+
+        // iterate over all the stored gain values to find the max - negamax style
+        for i in (1..depth).rev() {
+            gain[i-1] = -max(-gain[i-1], gain[i]);
+        }
+
+        gain[0]
+    }
+}
+
+impl <'a> Iterator for MoveList<'a> {
+    type Item = Move;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut best_idx = None;
+        let mut best_score = i32::MIN;
+
+        for (i, score) in self.scores.iter().enumerate() {
+            if score > &best_score {
+                best_idx = Some(i);
+                best_score = *score;
+            }
+        }
+
+        if let Some(best_idx) = best_idx {
+            // println!("{}\n{best_score}\n", self.moves[best_idx]);
+
+            self.scores[best_idx] = i32::MIN;
+            Some(self.moves[best_idx])
+        } else {
+            None
+        }
+    }
 }
 
 pub fn get_piece(board: &Board, sq: u32) -> u32 {
@@ -538,7 +712,17 @@ pub fn get_xpiece(board: &Board, sq: u32) -> u32 {
     12
 }
 
+#[inline]
 pub fn sq_attacked(board: &Board, mt: &MoveTables, sq: usize, attacker_colour: usize) -> bool {
+    get_attackers(board, mt, sq, attacker_colour) > 0
+}
+
+#[inline]
+fn get_all_attackers(board: &Board, mt: &MoveTables, sq: usize) -> u64 {
+    get_attackers(board, mt, sq, 0) | get_attackers(board, mt, sq, 1)
+}
+
+fn get_attackers(board: &Board, mt: &MoveTables, sq: usize, attacker_colour: usize) -> u64 {
     let mut attackers = mt.pawn_attacks[attacker_colour^1][sq] & board.pieces[PAWN+attacker_colour];
     attackers |= mt.knight_moves[sq] & board.pieces[KNIGHT+attacker_colour];
     attackers |= mt.king_moves[sq] & board.pieces[KING+attacker_colour];
@@ -549,10 +733,11 @@ pub fn sq_attacked(board: &Board, mt: &MoveTables, sq: usize, attacker_colour: u
     rq &= board.pieces[ROOK+attacker_colour] | board.pieces[QUEEN+attacker_colour];
     attackers |= rq;
 
-    attackers > 0
+    attackers
 }
 
-pub fn moved_into_check(board: &Board, mt: &MoveTables, m: &Move) -> bool {
+
+pub fn moved_into_check(board: &Board, mt: &MoveTables, m: Move) -> bool {
     let ksq = board.pieces[KING + (board.colour_to_move ^ 1)].trailing_zeros() as usize;
     SQUARES[m.from() as usize] & mt.superrays[ksq] > 0
         && sq_attacked(board, mt, ksq, board.colour_to_move)
@@ -567,7 +752,9 @@ pub fn is_in_check(board: &Board, mt: &MoveTables) -> bool {
     )
 }
 
-pub fn is_legal_move(board: &Board, mt: &MoveTables, m: &Move) -> bool {
+pub fn is_legal_move(board: &Board, mt: &MoveTables, m: Move, prev_moves: &PrevMoves) -> bool {
+    if board.halfmove > 100 || prev_moves.get_count(board.hash) == 3 { return false; }
+
     match m.move_type() {
         // check castle moves to see if the king passes through an attacked square
         WKINGSIDE => !sq_attacked(board, mt, 5, 1) 
@@ -580,4 +767,37 @@ pub fn is_legal_move(board: &Board, mt: &MoveTables, m: &Move) -> bool {
             & !sq_attacked(board, mt, 58, 0),
         _ => true,
     }
+}
+
+
+#[test]
+fn see_evaluation() {
+    let mt = MoveTables::new();
+
+    let board1 = Board::new_fen("1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - -");
+    let ml = MoveList::new(&board1, &mt, 100, 100);
+
+    let rxe5 = Move::new(4, 36, ROOK as u32, 1, CAP);
+    assert_eq!(ml.see(rxe5), PIECE_VALUES[PAWN]);
+
+    let board2 = Board::new_fen("1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - -");
+    let ml = MoveList::new(&board2, &mt, 100, 100);
+
+    let nxe5 = Move::new(19, 36, KNIGHT as u32, 1, CAP);
+    assert_eq!(ml.see(nxe5), -225)
+}
+
+#[test]
+fn move_ordering() {
+    let tt = SeqTT::new();
+    let mt = MoveTables::new();
+    let km = KillerMoves::new();
+
+
+    let board = Board::new_fen("1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - -");
+    let ml_scored = MoveList::all_scored(&board, false, &mt, &tt, &km, 0);
+    let scored: Vec<Move> = ml_scored.collect();
+    let unscored: Vec<Move> = MoveList::all(&board, &mt, false).moves;
+
+    assert_eq!(scored.len(), unscored.len())
 }

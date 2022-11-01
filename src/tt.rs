@@ -1,12 +1,11 @@
-use lazy_static::lazy_static;
 use rand::distributions;
 use rand::distributions::Standard;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::borrow::BorrowMut;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
-use std::sync::RwLock;
-use crate::eval::CHECKMATE;
+use std::sync::{Mutex, RwLock};
+use crate::eval::{CHECKMATE, MATED};
 use crate::Move;
 use crate::tt::EntryType::PV;
 
@@ -84,7 +83,7 @@ impl SeqTT {
             // if checkmate adjust the score so that it includes the amoiunt of plies up until
             // this point, the checkmate score should be stored so that it reflects the distance
             // between the mated node and this current one (not all the way up to the root)
-            let score = if entry.score >= -CHECKMATE {
+            let score = if entry.score >= MATED {
                 entry.score - ply as i32
             } else if entry.score <= CHECKMATE {
                 entry.score + ply as i32
@@ -101,7 +100,7 @@ impl SeqTT {
     }
 
     #[inline]
-    pub fn get_best(&mut self, hash: u64) -> Option<Move> {
+    pub fn get_best(&self, hash: u64) -> Option<Move> {
         self.ttable[(hash & TT_IDX_MASK) as usize].and_then(|entry| entry.best)
     }
 
@@ -116,13 +115,13 @@ impl SeqTT {
     ) {
         // if checkmate make the score only the distance between this node and the checkmate
         // as opposed to the checkmate from the root
-        let score = if score >= -CHECKMATE { score + ply as i32 }
+        let adjusted_score = if score >= MATED { score + ply as i32 }
             else if score <= CHECKMATE { score - ply as i32 }
             else { score };
 
         self.ttable[(hash & TT_IDX_MASK) as usize] = Some(TTEntry {
             hash,
-            score,
+            score: adjusted_score,
             e_type,
             depth,
             best
@@ -134,63 +133,85 @@ impl SeqTT {
 
 
 // parallel transposition table
-pub struct AtomicTT {
-    ttable: Box<[AtomicTTEntry]>,
-    hit_count: usize,
-    miss_count: usize,
+pub struct ParaTT {
+    ttable: Box<[RwLock<Option<TTEntry>>]>,
+    hit_count: AtomicUsize,
+    miss_count: AtomicUsize,
 }
 
-impl AtomicTT {
-    pub fn new() -> AtomicTT {
-        AtomicTT {
-            ttable: (0..TTABLE_SIZE)
-                .map(|_| AtomicTTEntry::random_entry())
-                .collect(),
-            hit_count: 0,
-            miss_count: 0,
+impl ParaTT {
+    pub fn new() -> ParaTT {
+        ParaTT {
+            ttable: (0..TTABLE_SIZE).map(|_| RwLock::new(None)).collect(),
+            hit_count: AtomicUsize::new(0),
+            miss_count: AtomicUsize::new(0),
         }
     }
 
-    pub fn get(&self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
-        todo!()
+    pub fn get_score(
+        &self,
+        hash: u64,
+        depth: usize,
+        alpha: i32,
+        beta: i32,
+        ply: usize
+    ) -> Option<i32> {
+        self.ttable[(hash & TT_IDX_MASK) as usize]
+            .read()
+            .unwrap()
+            .and_then(|entry| {
+            if entry.hash != hash || entry.depth < depth {
+                return None;
+            }
+
+            // if checkmate adjust the score so that it includes the amoiunt of plies up until
+            // this point, the checkmate score should be stored so that it reflects the distance
+            // between the mated node and this current one (not all the way up to the root)
+            let score = if entry.score >= MATED {
+                entry.score - ply as i32
+            } else if entry.score <= CHECKMATE {
+                entry.score + ply as i32
+            } else {
+                entry.score
+            };
+
+            match entry.e_type {
+                EntryType::PV => Some(score),
+                EntryType::Alpha => if score <= alpha { Some(score) } else { None },
+                EntryType::Beta => if score >= beta { Some(score) } else { None }
+            }
+        })
     }
 
-    pub fn insert(&self, hash: u64, score: i32, e_type: u8) {
+    #[inline]
+    pub fn get_best(&self, hash: u64) -> Option<Move> {
         self.ttable[(hash & TT_IDX_MASK) as usize]
-            .hash
-            .store(hash, ORDER);
-        self.ttable[(hash & TT_IDX_MASK) as usize]
-            .score
-            .store(score, ORDER);
-        self.ttable[(hash & TT_IDX_MASK) as usize]
-            .e_type
-            .store(e_type, ORDER);
-    }
-}
-
-
-
-struct AtomicTTEntry {
-    hash: AtomicU64,
-    score: AtomicI32,
-    e_type: AtomicU8,
-}
-
-impl AtomicTTEntry {
-    pub fn default() -> AtomicTTEntry {
-        AtomicTTEntry {
-            hash: AtomicU64::new(0),
-            score: AtomicI32::new(0),
-            e_type: AtomicU8::new(0),
-
-        }
+            .read()
+            .unwrap()
+            .and_then(|entry| entry.best)
     }
 
-    pub fn random_entry() -> AtomicTTEntry {
-        AtomicTTEntry {
-            hash: AtomicU64::new(rand::thread_rng().gen()),
-            score: AtomicI32::new(rand::thread_rng().gen()),
-            e_type: AtomicU8::new(rand::thread_rng().gen_range(0..2)),
-        }
+    pub fn insert(
+        &self,
+        hash: u64,
+        score: i32,
+        e_type: EntryType,
+        depth: usize,
+        best: Option<Move>,
+        ply: usize
+    ) {
+        // if checkmate make the score only the distance between this node and the checkmate
+        // as opposed to the checkmate from the root
+        let adjusted_score = if score >= MATED { score + ply as i32 }
+        else if score <= CHECKMATE { score - ply as i32 }
+        else { score };
+
+        *self.ttable[(hash & TT_IDX_MASK) as usize].write().unwrap() = Some(TTEntry {
+            hash,
+            score: adjusted_score,
+            e_type,
+            depth,
+            best
+        });
     }
 }

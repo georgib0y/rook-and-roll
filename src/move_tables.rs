@@ -5,14 +5,8 @@ use crate::move_info::{
 };
 use crate::moves::Move;
 use crate::print_bb;
-use lazy_static::lazy_static;
 use rand::prelude::*;
 use std::sync::Arc;
-
-// TODO Maybe get rid of lazy static all together?
-lazy_static! {
-    pub static ref MT: MoveTables = MoveTables::new();
-}
 
 pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
@@ -45,6 +39,7 @@ impl MoveTables {
         Arc::new(MoveTables::new())
     }
 
+    #[inline]
     pub fn get_rook_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         occupancy &= ROOK_MASK[sq];
         occupancy = occupancy.wrapping_mul(ROOK_MAGIC[sq]);
@@ -52,18 +47,21 @@ impl MoveTables {
         self.rook_moves[sq][occupancy as usize]
     }
 
+    #[inline]
     pub fn get_rook_xray(&self, occupancy: u64, mut blockers: u64, sq: usize) -> u64 {
         let attacks = self.get_rook_moves(occupancy, sq);
         blockers &= attacks;
         attacks ^ self.get_rook_moves(occupancy ^ blockers, sq)
     }
 
+    #[inline]
     pub fn get_bishop_xray(&self, occupancy: u64, mut blockers: u64, sq: usize) -> u64 {
         let attacks = self.get_bishop_moves(occupancy, sq);
         blockers &= attacks;
         attacks ^ self.get_bishop_moves(occupancy ^ blockers, sq)
     }
 
+    #[inline]
     pub fn get_bishop_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         occupancy &= BISHOP_MASK[sq];
         occupancy = occupancy.wrapping_mul(BISHOP_MAGIC[sq]);

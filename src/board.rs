@@ -6,6 +6,7 @@ use crate::movegen::*;
 use crate::moves::Move;
 use crate::zorbist::Zorb;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 
 pub const PAWN: usize = 0;
@@ -78,69 +79,25 @@ impl Board {
         b.pieces = [0; 12];
         b.util = [0; 3];
         let fen: Vec<&str> = fen.split(' ').collect();
-        let mut j = 56;
-        for f in fen[0].chars() {
-            match f {
-                'P' => {
-                    b.pieces[0] ^= SQUARES[j];
-                    j += 1;
+
+        let name_piece: HashMap<char, usize> = HashMap::from([
+            ('P', 0), ('p', 1), ('N', 2), ('n', 3), ('R', 4), ('r', 5), ('B', 6), ('b', 7),
+            ('Q', 8), ('q', 9), ('K', 10), ('k', 11),
+        ]);
+
+        let fen_board: Vec<&str> = fen[0].split("/").collect();
+        fen_board.iter().rev().enumerate().for_each(|(i, row)| {
+            let mut idx = i*8;
+            for sq in row.chars() {
+                if let Some(piece) = name_piece.get(&sq) {
+                    b.pieces[*piece] ^= SQUARES[idx];
+                    idx += 1;
+                } else if '1' <= sq && sq <= '8' {
+                    idx += sq as usize - '0' as usize;
                 }
-                'p' => {
-                    b.pieces[1] ^= SQUARES[j];
-                    j += 1;
-                }
-                'N' => {
-                    b.pieces[2] ^= SQUARES[j];
-                    j += 1;
-                }
-                'n' => {
-                    b.pieces[3] ^= SQUARES[j];
-                    j += 1;
-                }
-                'R' => {
-                    b.pieces[4] ^= SQUARES[j];
-                    j += 1;
-                }
-                'r' => {
-                    b.pieces[5] ^= SQUARES[j];
-                    j += 1;
-                }
-                'B' => {
-                    b.pieces[6] ^= SQUARES[j];
-                    j += 1;
-                }
-                'b' => {
-                    b.pieces[7] ^= SQUARES[j];
-                    j += 1;
-                }
-                'Q' => {
-                    b.pieces[8] ^= SQUARES[j];
-                    j += 1;
-                }
-                'q' => {
-                    b.pieces[9] ^= SQUARES[j];
-                    j += 1;
-                }
-                'K' => {
-                    b.pieces[10] ^= SQUARES[j];
-                    j += 1;
-                }
-                'k' => {
-                    b.pieces[11] ^= SQUARES[j];
-                    j += 1;
-                }
-                '1' => j += '1' as usize - '0' as usize,
-                '2' => j += '2' as usize - '0' as usize,
-                '3' => j += '3' as usize - '0' as usize,
-                '4' => j += '4' as usize - '0' as usize,
-                '5' => j += '5' as usize - '0' as usize,
-                '6' => j += '6' as usize - '0' as usize,
-                '7' => j += '7' as usize - '0' as usize,
-                '8' => j += '8' as usize - '0' as usize,
-                '/' => j -= 16,
-                _ => {}
+
             }
-        }
+        });
 
         b.util[0] =
             b.pieces[0] | b.pieces[2] | b.pieces[4] | b.pieces[6] | b.pieces[8] | b.pieces[10];
@@ -189,9 +146,8 @@ impl Board {
     }
 
     // TODO debug hashing, dunno how to do that tho
-    // TODO also perf seems to drop a lot for not that many lines, could just be the zorb arr tho
 
-    pub fn copy_make(&self, m: &Move) -> Board {
+    pub fn copy_make(&self, m: Move) -> Board {
         // get info from board
         let (from, to, piece, xpiece, move_type) = m.all();
         let ft = SQUARES[from] | SQUARES[to];
@@ -215,7 +171,7 @@ impl Board {
 
         let mut halfmove = self.halfmove + 1;
 
-        let mut value = self.value + (-PST[piece][from] + PST[piece][to]) as i32;
+        let mut value = self.value -PST[piece][from] as i32 + PST[piece][to] as i32;
 
         // TODO inc update pst values
 
@@ -246,6 +202,7 @@ impl Board {
             BQUEENSIDE =>
                 update_castling(&mut pieces, &mut util, 1, 56, 59, &mut hash, &mut value),
             PROMO => {
+                // toggle the pawn off and the toggled piece on
                 pieces[self.colour_to_move] ^= SQUARES[to];
                 pieces[xpiece] ^= SQUARES[to];
 
@@ -306,6 +263,17 @@ impl Board {
             value
         }
     }
+
+
+    pub fn is_endgame(&self) -> bool {
+        // returns 0 if mid game and 1 if endgame for indexing psts
+        // endgame is if there are no queens or if a size has one queen and one or less minor pieces
+        let no_queens = (self.pieces[QUEEN] & self.pieces[QUEEN+1]).count_ones() == 0;
+        let w_minor_pieces = self.pieces[KNIGHT] | self.pieces[ROOK] | self.pieces[BISHOP] | self.pieces[QUEEN];
+        let b_minor_pieces = self.pieces[KNIGHT+1] | self.pieces[ROOK+1] | self.pieces[BISHOP+1] | self.pieces[QUEEN+1];
+
+        no_queens || w_minor_pieces.count_ones() <= 2 || b_minor_pieces.count_ones() <= 2
+    }
 }
 
 fn update_castling(
@@ -359,7 +327,25 @@ fn update_castle_state(
     castle_state
 
 }
+//
+#[test]
+fn inc_value_update() {
+    let board = Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
 
+    let quiet_move = Move::new(0,1,ROOK as u32,0,QUIET);
+    let quiet_board = board.copy_make(quiet_move);
+
+    let mut quiet_value = gen_mat_value(&quiet_board) + gen_pst_value(&quiet_board);
+
+    assert_eq!(quiet_board.value, quiet_value);
+
+    let cap_move = Move::new(25,32,BISHOP as u32, KNIGHT as u32 +1, CAP);
+    let cap_board = board.copy_make(cap_move);
+
+    let mut cap_value = gen_mat_value(&cap_board) + gen_pst_value(&cap_board);
+
+    assert_eq!(cap_board.value, cap_value)
+}
 
 
 
@@ -371,7 +357,7 @@ impl fmt::Display for Board {
             let s = i.to_string();
             out.push_str(&s);
             out.push_str("    ");
-            for sq in SQUARES.iter().take(8).skip(i * 8 - 8) {
+            for sq in SQUARES.iter().skip(i * 8 - 8).take(8) {
                 if (sq & self.pieces[0]) > 0 {
                     out.push_str("P ");
                 }
@@ -471,7 +457,7 @@ pub fn print_bb(bb: u64) {
         out.push_str(&i.to_string());
         out.push(' ');
 
-        for sq in SQUARES.iter().take(8).skip(i * 8 - 8) {
+        for sq in SQUARES.iter().skip(i * 8 - 8).take(8) {
             if sq & bb > 0 {
                 out.push_str(" X ");
             } else {

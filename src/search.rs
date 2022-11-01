@@ -7,45 +7,76 @@ use std::io::{BufWriter, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use crate::movegen::{is_in_check, is_legal_move, moved_into_check, MoveList};
+use crate::moves::{KillerMoves, PrevMoves};
+use crate::tt::EntryType;
 use crate::tt::EntryType::{Alpha, Beta, PV};
 
-const MAX_DEPTH: usize = 7;
-const MAX_TIME: u64 = 5000;
+pub const MAX_DEPTH: usize = 50;
+const MAX_TIME: u128 = 50000;
 const MAX_QUIESCE_DEPTH: usize = 10;
 
-// using lazy static atomic cause unsafe keyword scares me
+pub trait Searcher {
+    fn is_in_check(&self, board: &Board);
+    fn get_all_scored_moves(&self, board: &Board, check: bool, depth: usize);
+    fn get_in_check_moves(&self);
+    fn get_attack_moves(&self);
+    fn add_prev_move(&self, hash: u64);
+    fn rm_prev_move(&self, hash: u64);
+    fn moved_into_check(&self, board: &Board, m: Move);
+    fn is_legal_move(&self, board: &Board, m: &Move);
+    fn inc_node(&self);
+    fn tt_get_score(&self, hash: u64, depth: usize, alpha: i32, beta: i32, ply: usize);
+    fn tt_insert(
+        &self, hash: u64, score: i32, e_type: EntryType, depth: usize, best: Option<Move>, ply: usize
+    );
+
+}
+
 
 pub struct Search <'a> {
     mt: &'a MoveTables,
     tt: &'a mut SeqTT,
+    km: &'a mut KillerMoves,
     nodes: u64,
+    start: Instant,
+    prev_moves: &'a mut PrevMoves
 }
 
 impl <'a> Search <'a> {
-    pub fn new(mt: &'a MoveTables, tt: &'a mut SeqTT) -> Search <'a> {
-        Search { mt, tt, nodes: 0 }
+    pub fn new(
+        mt: &'a MoveTables,
+        tt: &'a mut SeqTT,
+        km: &'a mut KillerMoves,
+        prev_moves: &'a mut PrevMoves
+    ) -> Search <'a> {
+        Search { mt, tt, km, nodes: 0, start: Instant::now(), prev_moves }
     }
+
+    fn is_timeout(&self) -> bool { self.start.elapsed().as_millis() > MAX_TIME }
+    fn can_start_iter(&self) -> bool { self.start.elapsed().as_millis() < (MAX_TIME / 2) }
 
     // TODO impl time constraint
     pub fn iterative_deepening(&mut self, board: &Board) -> Option<Move> {
         let mut best_move = None;
         let mut best_score = 0;
 
-        let start = Instant::now();
+        self.start = Instant::now();
         self.nodes = 0;
 
         let mut nps: f64 = 0.0;
         let mut elapsed: f64 = 0.0;
         for depth in 1..=MAX_DEPTH {
+            if !self.can_start_iter() { break; }
+
             (best_score, best_move) = self.root_negamax(board, depth);
 
-            elapsed = start.elapsed().as_millis() as f64; // so that there is no divide by 0 err
+            elapsed = self.start.elapsed().as_millis() as f64; // so that there is no divide by 0 err
             nps = self.nodes as f64 / (elapsed / 1000f64);
             if nps.is_infinite() {
                 nps = 0f64;
             }
 
-            let info = format!("info depth {} score cp {} nps {}", depth, best_score, (nps) as usize);
+            let info = format!("info depth {depth} score cp {best_score} nps {} pv {}", (nps) as usize, best_move.unwrap().as_uci_string());
             info!(target: "output", "{}", info);
             println!("{}", info);
         }
@@ -62,15 +93,18 @@ impl <'a> Search <'a> {
         let p_mul = if board.colour_to_move == 0 { 1 } else { -1 };
 
         let check = is_in_check(board, self.mt);
-        let ml = MoveList::all(board, self.mt, check);
-        for m in ml.moves {
-            let b = board.copy_make(&m);
-            if (!check && moved_into_check(&b, self.mt, &m))
-                || !is_legal_move(&b, self.mt, &m) { continue; }
+        let ml = MoveList::all_scored(board, check, self.mt, self.tt, self.km, depth);
+        for m in ml {
+            let b = board.copy_make(m);
 
-            // TODO changed alpha from i32::MIN+1 so that at least one move gets chosen each time, may be bad for elo dunno
-            // TODO could lower beta bounds by best_score but im trying it without
+            self.prev_moves.add(b.hash);
+
+            if (!check && moved_into_check(&b, self.mt, m))
+                || !is_legal_move(&b, self.mt, m, self.prev_moves) { continue; }
+
             let mut score = -self.negamax(&b, depth - 1, 1, i32::MIN + 2, -best_score, -p_mul);
+
+            self.prev_moves.remove(b.hash);
 
             if score > best_score {
                 best_move = Some(m);
@@ -108,15 +142,20 @@ impl <'a> Search <'a> {
         let check = is_in_check(board, self.mt);
         let mut not_moved = true;
         let mut score = i32::MIN;
-        let ml = MoveList::all(board, self.mt, check);
-        for m in ml.moves {
+        let ml = MoveList::all_scored(board, check, self.mt, self.tt, self.km, depth);
+        for m in ml {
             not_moved = false;
 
-            let b = board.copy_make(&m);
-            if (!check && moved_into_check(&b, self.mt, &m))
-                || !is_legal_move(&b, self.mt, &m) { continue; }
+            let b = board.copy_make(m);
+
+            self.prev_moves.add(b.hash);
+
+            if (!check && moved_into_check(&b, self.mt, m))
+                || !is_legal_move(&b, self.mt, m, self.prev_moves) { continue; }
 
             score = -self.negamax(&b, depth - 1, ply + 1, -beta, -alpha, -p_mul);
+
+            self.prev_moves.remove(b.hash);
 
             if score > alpha {
                 table_entry_type = PV;
@@ -184,9 +223,9 @@ impl <'a> Search <'a> {
         }
 
         for m in ml.moves {
-            let b = board.copy_make(&m);
-            if (!check && moved_into_check(&b, self.mt, &m))
-                || !is_legal_move(&b, self.mt, &m) { continue; }
+            let b = board.copy_make(m);
+            if (!check && moved_into_check(&b, self.mt, m))
+                || !is_legal_move(&b, self.mt, m, self.prev_moves) { continue; }
 
             let score = -self.quiesce(&b, ply + 1, max_ply, -beta, -alpha, -p_mul);
 

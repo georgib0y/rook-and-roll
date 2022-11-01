@@ -8,40 +8,21 @@ movetype 0-12,  4 bits
                 24 bits
 
 ep, last castle state and last halfmove can all be stored in search - aha not with copy move tho
+*/
 
-// TODO pretty shure this ius outdated
-movetypes:
-0   quiet
-1   push
-2   cap
-3   wkingside
-4   wqueenside
-5   bkingside
-6   bqueenside
-7   knight_promo
-8   rook_promo
-9   bishop_promo
-10  queen_promo
-11  knight_promo_cap
-12  rook_promo_cap
-13  bishop_promo_cap
-14  queen_promo_cap
- */
-
-use std::arch::x86_64::{__m128i, __m256i, _mm256_and_si256, _mm256_broadcastd_epi32, _mm256_extract_epi32, _mm256_set_epi32, _mm256_setzero_si256, _mm256_srav_epi32, _mm_set1_epi32};
 use crate::move_info::SQ_NAMES;
-use crate::movegen::{B_PROMO_CAP, CAP, DOUBLE, EP, KINGSIDE, N_PROMO_CAP, PROMO, QUEENSIDE, QUIET, Q_PROMO_CAP, R_PROMO_CAP, get_piece, get_xpiece};
-// get_piece, get_xpiece,
+use crate::movegen::{B_PROMO_CAP, CAP, DOUBLE, EP, KINGSIDE, N_PROMO_CAP, PROMO, QUEENSIDE, QUIET, Q_PROMO_CAP, R_PROMO_CAP, get_piece, get_xpiece, CAP_SCORE_OFFSET};
 use crate::{Board, MoveList, MoveTables};
 use std::fmt::{write, Display, Formatter};
-use std::mem;
 use crate::board::PIECE_NAMES;
 use crate::movegen::MTYPE_STRS;
+use crate::search::MAX_DEPTH;
 
+const PREV_MOVE_SIZE: usize = 16384;
+const PREV_MOVE_MASK: u64 = 0x3FFF;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct Move(u32);
-
 
 impl Move {
     #[inline]
@@ -49,6 +30,8 @@ impl Move {
         //dbg!(from, to, piece, xpiece, move_type);
         Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type)
     }
+
+    pub fn new_from_u32(m: u32) -> Move { Move(m) }
 
     #[inline]
     pub fn from(&self) -> u32 {
@@ -147,30 +130,6 @@ impl Move {
     }
 }
 
-// #[derive(Copy, Clone)]
-// struct MoveSimd(u64);
-//
-// impl MoveSimd {
-//     fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: u32) -> MoveSimd {
-//         let m: [u8; 8] = [from as u8, to as u8, piece as u8, xpiece as u8, move_type as u8, 0,0,0];
-//         unsafe { mem::transmute::<[u8;8], MoveSimd>(m) }
-//     }
-//
-//     pub fn all(&self) -> (usize, usize, usize, usize, u32) {
-//         unsafe {
-//             let all = mem::transmute::<MoveSimd, [u8;8]>(*self);
-//             (all[0] as usize, all[1] as usize, all[2] as usize, all[3] as usize, all[4] as u32)
-//         }
-//     }
-// }
-
-#[test]
-fn simd_moving() {
-    let m = Move::new(0, 1, 2, 3, 4);
-    let all = m.all();
-    assert_eq!(all, (0,1,2,3,4) );
-}
-
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let (fr,t,p,x,m) = self.all();
@@ -207,3 +166,59 @@ fn text_from_promo_piece(promo_piece: u32) -> String {
         _ => String::from(""),
     }
 }
+
+#[derive(Clone)]
+pub struct PrevMoves {
+    prev: Box<[u8; PREV_MOVE_SIZE]>
+}
+
+impl PrevMoves {
+    pub fn new() -> PrevMoves {
+        PrevMoves { prev: Box::new([0;PREV_MOVE_SIZE]) }
+    }
+
+    pub fn add(&mut self, hash: u64) {
+        self.prev[(hash & PREV_MOVE_MASK) as usize] += 1;
+    }
+
+    pub fn remove(&mut self, hash: u64) {
+        self.prev[(hash & PREV_MOVE_MASK) as usize] -= 1;
+    }
+
+    pub fn get_count(&self, hash: u64) -> u8 {
+        self.prev[(hash & PREV_MOVE_MASK) as usize]
+    }
+}
+
+#[derive(Clone)]
+pub struct KillerMoves {
+    killer_moves: Vec<(Option<Move>, Option<Move>)>,
+}
+
+impl KillerMoves {
+    pub fn new() -> KillerMoves {
+        KillerMoves { killer_moves: vec![(None, None); MAX_DEPTH] }
+    }
+
+    pub fn add(&mut self, m: Move, depth: usize) {
+        if let Some(killers) = self.killer_moves.get_mut(depth) {
+            // dont add the same move in twice
+            if Some(m) == killers.0 { return; }
+
+            // shuffle the killer moves upwards
+            killers.1 = killers.0;
+            killers.0 = Some(m);
+        }
+    }
+
+    // returns an option containing an i32 for move scoring or none
+    pub fn get_move(&self, m: Move, depth: usize) -> Option<i32> {
+        self.killer_moves.get(depth).and_then(|killers| {
+            killers.0.and_then(|_| Some(2+CAP_SCORE_OFFSET))
+                .or_else(|| killers.1.and_then(|_| Some(1+CAP_SCORE_OFFSET)))
+
+        })
+    }
+}
+
+// TODO Could have a root order list that uses iter to change the score of every
