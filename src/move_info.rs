@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use crate::eval::gen_mat_value;
-
 pub const SQUARES: [u64; 65] = [
     0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x100, 0x200, 0x400, 0x800, 0x1000, 0x2000, 0x4000,
     0x8000, 0x10000, 0x20000, 0x40000, 0x80000, 0x100000, 0x200000, 0x400000, 0x800000, 0x1000000,
@@ -16,20 +13,20 @@ pub const SQUARES: [u64; 65] = [
 // file masks
 pub const FA: u64 = 0x0101010101010101;
 pub const FB: u64 = 0x0202020202020202;
-pub const FC: u64 = 0x0404040404040404;
-pub const FD: u64 = 0x0808080808080808;
-pub const FE: u64 = 0x1010101010101010;
-pub const FF: u64 = 0x2020202020202020;
+pub const _FC: u64 = 0x0404040404040404;
+pub const _FD: u64 = 0x0808080808080808;
+pub const _FE: u64 = 0x1010101010101010;
+pub const _FF: u64 = 0x2020202020202020;
 pub const FG: u64 = 0x4040404040404040;
 pub const FH: u64 = 0x8080808080808080;
 
 // rank masks
 pub const R1: u64 = 0x00000000000000FF;
 pub const R2: u64 = 0x000000000000FF00;
-pub const R3: u64 = 0x0000000000FF0000;
-pub const R4: u64 = 0x00000000FF000000;
-pub const R5: u64 = 0x000000FF00000000;
-pub const R6: u64 = 0x0000FF0000000000;
+pub const _R3: u64 = 0x0000000000FF0000;
+pub const _R4: u64 = 0x00000000FF000000;
+pub const _R5: u64 = 0x000000FF00000000;
+pub const _R6: u64 = 0x0000FF0000000000;
 pub const R7: u64 = 0x00FF000000000000;
 pub const R8: u64 = 0xFF00000000000000;
 

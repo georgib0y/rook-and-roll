@@ -1,9 +1,11 @@
 use crate::move_info::PST;
 use crate::Board;
-use crate::board::{BISHOP, KING, KNIGHT, ROOK};
+use crate::board::KING;
 
 pub const CHECKMATE: i32 = -1000000000;
 pub const MATED: i32 = -CHECKMATE;
+
+pub const STALEMATE: i32 = 0;
 
 // TODO these values are not final, have been taken directly from rustinator 1
 const PAWN_VALUE: i32 = 100;
@@ -32,22 +34,22 @@ pub const MAT_SCORES: [i32; 12] = [
 ];
 
 
-const BISHOP_PAIR_BONUS: i32 = 30;
-const ROOK_PAIR_PEN: i32 = -10;
-const KNIGHT_PAIR_PEN: i32 = -10;
-const NO_PAWNS_PEN: i32 = -200;
+const _BISHOP_PAIR_BONUS: i32 = 30;
+const _ROOK_PAIR_PEN: i32 = -10;
+const _KNIGHT_PAIR_PEN: i32 = -10;
+const _NO_PAWNS_PEN: i32 = -200;
 
 
 pub fn eval(board: &Board, colour_mul: i32) -> i32 {
     let mut eval = 0;
     eval += board.value;
 
-    // if board.is_endgame() {
-    //     // adjust king pst to endgame pst
-    //     let ksq = board.pieces[KING+board.colour_to_move].trailing_zeros() as usize;
-    //     eval += (-PST[KING+board.colour_to_move][ksq] + -PST[KING+board.colour_to_move+2][ksq]) as i32
-    // }
-    //
+    if board.is_endgame() {
+        // adjust king pst to endgame pst
+        let ksq = board.pieces[KING+board.colour_to_move].trailing_zeros() as usize;
+        eval += (-PST[KING+board.colour_to_move][ksq] + -PST[KING+board.colour_to_move+2][ksq]) as i32
+    }
+
     // // bishop pair bonus
     // if board.pieces[BISHOP + board.colour_to_move].count_ones() == 2 {
     //     eval += BISHOP_PAIR_BONUS;
@@ -79,8 +81,21 @@ pub fn eval(board: &Board, colour_mul: i32) -> i32 {
 //     mobility
 // }
 
+#[test]
+fn iterator_funny_buiz() {
+
+    let range: Vec<(i32, i32)> = (0..12).step_by(2).zip((1..12).step_by(2))
+        .collect();
+
+    let arr: Vec<(i32, i32)> = vec![(0 , 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11)];
+
+    assert_eq!(range, arr);
+}
+
 pub fn gen_pst_value(board: &Board) -> i32 {
     let mut pos = 0;
+
+    // (0..12).step_by(2).zip((1..12).step_by(2)).for_each(|(w, b)|)
 
     [(0 , 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11)].iter().for_each(|(w, b)| {
         let mut w_piece = board.pieces[*w];
@@ -102,20 +117,12 @@ pub fn gen_pst_value(board: &Board) -> i32 {
 }
 
 pub fn gen_mat_value(b: &Board) -> i32 {
-    let mut mat = b.pieces[0].count_ones() as i32 * PAWN_VALUE;
-    mat -= b.pieces[1].count_ones() as i32 * PAWN_VALUE;
+    let mut mat = 0;
 
-    mat += b.pieces[2].count_ones() as i32 * KNIGHT_VALUE;
-    mat -= b.pieces[3].count_ones() as i32 * KNIGHT_VALUE;
-
-    mat += b.pieces[4].count_ones() as i32 * ROOK_VALUE;
-    mat -= b.pieces[5].count_ones() as i32 * ROOK_VALUE;
-
-    mat += b.pieces[6].count_ones() as i32 * BISHOP_VALUE;
-    mat -= b.pieces[7].count_ones() as i32 * BISHOP_VALUE;
-
-    mat += b.pieces[8].count_ones() as i32 * QUEEN_VALUE;
-    mat -= b.pieces[9].count_ones() as i32 * QUEEN_VALUE;
+    for piece in (0..10).step_by(2) {
+        mat += b.pieces[piece].count_ones() as i32 * PIECE_VALUES[piece];
+        mat -= b.pieces[piece+1].count_ones() as i32 * PIECE_VALUES[piece];
+    }
 
     mat
 }

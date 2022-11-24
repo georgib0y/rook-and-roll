@@ -1,11 +1,7 @@
-#![allow(unused)]
-
 use crate::eval::{gen_mat_value, gen_pst_value, MAT_SCORES};
 use crate::move_info::{PST, SQUARES};
-use crate::movegen::*;
-use crate::moves::Move;
+use crate::moves::{Move, MoveType};
 use crate::zorbist::Zorb;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -17,6 +13,11 @@ pub const QUEEN: usize = 8;
 pub const KING: usize = 10;
 
 pub const PIECE_NAMES: [&str; 12] = ["P", "p", "N", "n", "R", "r", "B", "b", "Q", "q", "K", "k"];
+
+const WKS_STATE: usize = 0;
+const WQS_STATE: usize = 1;
+const BKS_STATE: usize = 2;
+const BQS_STATE: usize = 3;
 
 // 0 - white to move, 1 - black to move
 
@@ -164,9 +165,7 @@ impl Board {
         util[2] ^= ft;
 
         // toggle ep file if there is one
-        if self.ep < 64 {
-            hash ^= Zorb::ep_file(self.ep);
-        }
+        if self.ep < 64 { hash ^= Zorb::ep_file(self.ep); }
         let mut ep = 64;
 
         let mut halfmove = self.halfmove + 1;
@@ -177,13 +176,13 @@ impl Board {
 
         match move_type {
             // (piece > 1) as usize == 1 if piece not pawn, so halfmove*1, if pawn halfmove*0 == 0
-            QUIET => halfmove *= (piece > 1) as usize,
-            DOUBLE => {
+            MoveType::Quiet => halfmove *= (piece > 1) as usize,
+            MoveType::Double => {
                 ep = to - 8 + (self.colour_to_move * 16);
                 hash ^= Zorb::ep_file(ep);
                 halfmove = 0;
             }
-            CAP => {
+            MoveType::Cap => {
                 pieces[xpiece] ^= SQUARES[to];
                 util[self.colour_to_move ^ 1] ^= SQUARES[to];
                 util[2] ^= SQUARES[to];
@@ -193,15 +192,15 @@ impl Board {
                 hash ^= Zorb::piece(xpiece, to);
                 halfmove = 0;
             }
-            WKINGSIDE =>
+            MoveType::WKingSide =>
                 update_castling(&mut pieces, &mut util, 0, 5, 7, &mut hash, &mut value),
-            BKINGSIDE =>
+            MoveType::BKingSide =>
                 update_castling(&mut pieces, &mut util, 1, 61, 63, &mut hash, &mut value),
-            WQUEENSIDE =>
+            MoveType::WQueenSide =>
                 update_castling(&mut pieces, &mut util, 0, 0, 3, &mut hash, &mut value),
-            BQUEENSIDE =>
+            MoveType::BQueenSide =>
                 update_castling(&mut pieces, &mut util, 1, 56, 59, &mut hash, &mut value),
-            PROMO => {
+            MoveType::Promo => {
                 // toggle the pawn off and the toggled piece on
                 pieces[self.colour_to_move] ^= SQUARES[to];
                 pieces[xpiece] ^= SQUARES[to];
@@ -213,7 +212,7 @@ impl Board {
                 value += (-PST[piece][to] + PST[xpiece][to]) as i32;
                 halfmove = 0;
             }
-            N_PROMO_CAP | R_PROMO_CAP | B_PROMO_CAP | Q_PROMO_CAP => {
+            MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap | MoveType::QPromoCap => {
                 // N_PROMO_CAP (8) - 7 = [1], [1] * 2 + b.colour_to_move == 2 or 3 (knight idx)
                 // R_PROMO_CAP (9) - 7 = [2], [2] * 2 + b.colour_to_move == 4 or 5 (rook idx) etc
                 let promo_piece = (move_type as usize - 7) * 2 + self.colour_to_move;
@@ -237,7 +236,7 @@ impl Board {
                 value += (-PST[xpiece][to] - PST[piece][to] + PST[promo_piece][to]) as i32;
                 halfmove = 0;
             }
-            EP => {
+            MoveType::Ep => {
                 pieces[self.colour_to_move ^ 1] ^= SQUARES[to - 8 + (self.colour_to_move * 16)];
                 util[self.colour_to_move ^ 1] ^= SQUARES[to - 8 + (self.colour_to_move * 16)];
                 util[2] ^= SQUARES[to - 8 + (self.colour_to_move * 16)];
@@ -246,7 +245,6 @@ impl Board {
                 value -= MAT_SCORES[xpiece] + PST[xpiece][to] as i32;
                 halfmove = 0;
             }
-            _ => panic!("Move type: {move_type}, outside of range!"),
         }
 
         let castle_state = update_castle_state(from, to, piece, self.castle_state, &mut hash);
@@ -306,22 +304,22 @@ fn update_castle_state(
     // stop thinking you can optimise this you have the ifs for the hash
     if (piece == 10 || from == 7 || to == 7) && castle_state & 0b1000 > 0 {
         castle_state &= 0b0111;
-        *hash ^= Zorb::castle_rights(0);
+        *hash ^= Zorb::castle_rights(WKS_STATE);
     }
 
     if (piece == 10 || from == 0 || to == 0) && castle_state & 0b100 > 0 {
         castle_state &= 0b1011;
-        *hash ^= Zorb::castle_rights(1);
+        *hash ^= Zorb::castle_rights(WQS_STATE);
     }
 
     if (piece == 11 || from == 63 || to == 63) && castle_state & 0b10 > 0 {
         castle_state &= 0b1101;
-        *hash ^= Zorb::castle_rights(2);
+        *hash ^= Zorb::castle_rights(BKS_STATE);
     }
 
     if (piece == 11 || from == 56 || to == 56) && castle_state & 0b1 > 0 {
         castle_state &= 0b1110;
-        *hash ^= Zorb::castle_rights(3);
+        *hash ^= Zorb::castle_rights(BQS_STATE);
     }
 
     castle_state
@@ -332,17 +330,17 @@ fn update_castle_state(
 fn inc_value_update() {
     let board = Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
 
-    let quiet_move = Move::new(0,1,ROOK as u32,0,QUIET);
+    let quiet_move = Move::new(0,1,ROOK as u32,0,MoveType::Quiet);
     let quiet_board = board.copy_make(quiet_move);
 
-    let mut quiet_value = gen_mat_value(&quiet_board) + gen_pst_value(&quiet_board);
+    let quiet_value = gen_mat_value(&quiet_board) + gen_pst_value(&quiet_board);
 
     assert_eq!(quiet_board.value, quiet_value);
 
-    let cap_move = Move::new(25,32,BISHOP as u32, KNIGHT as u32 +1, CAP);
+    let cap_move = Move::new(25,32,BISHOP as u32, KNIGHT as u32 +1, MoveType::Cap);
     let cap_board = board.copy_make(cap_move);
 
-    let mut cap_value = gen_mat_value(&cap_board) + gen_pst_value(&cap_board);
+    let cap_value = gen_mat_value(&cap_board) + gen_pst_value(&cap_board);
 
     assert_eq!(cap_board.value, cap_value)
 }
@@ -450,7 +448,7 @@ macro_rules! print_bb {
     };
 }
 
-pub fn print_bb(bb: u64) {
+pub fn _print_bb(bb: u64) {
     let mut out = String::new();
 
     for i in (1..9).rev() {

@@ -11,24 +11,74 @@ ep, last castle state and last halfmove can all be stored in search - aha not wi
 */
 
 use crate::move_info::SQ_NAMES;
-use crate::movegen::{B_PROMO_CAP, CAP, DOUBLE, EP, KINGSIDE, N_PROMO_CAP, PROMO, QUEENSIDE, QUIET, Q_PROMO_CAP, R_PROMO_CAP, get_piece, get_xpiece, CAP_SCORE_OFFSET};
-use crate::{Board, MoveList, MoveTables};
-use std::fmt::{write, Display, Formatter};
+use crate::Board;
+use std::fmt::{Display, Formatter};
 use crate::board::PIECE_NAMES;
-use crate::movegen::MTYPE_STRS;
+// use crate::move_scorer::CAP_SCORE_OFFSET;
+use crate::movegen::{CAP_SCORE_OFFSET, get_piece, get_xpiece};
 use crate::search::MAX_DEPTH;
 
 const PREV_MOVE_SIZE: usize = 16384;
 const PREV_MOVE_MASK: u64 = 0x3FFF;
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MoveType {
+    Quiet,
+    Double,
+    Cap,
+    WKingSide,
+    BKingSide,
+    WQueenSide,
+    BQueenSide,
+    Promo,
+    NPromoCap,
+    RPromoCap,
+    BPromoCap,
+    QPromoCap,
+    Ep
+}
+
+impl MoveType {
+    #[inline]
+    pub fn kingside(ctm: usize) -> MoveType {
+        if ctm == 0 { MoveType::WKingSide } else { MoveType::BKingSide }
+    }
+    
+    #[inline]
+    pub fn queenside(ctm: usize) -> MoveType {
+        if ctm == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide }
+    }
+}
+
+impl Display for MoveType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            MoveType::Quiet => "Quiet",
+            MoveType::Double => "Double",
+            MoveType::Cap => "Cap",
+            MoveType::WKingSide => "W Kingside",
+            MoveType::BKingSide => "B Kingside",
+            MoveType::WQueenSide => "W Queenside",
+            MoveType::BQueenSide => "B Queenside",
+            MoveType::Promo => "Promo",
+            MoveType::NPromoCap => "N Promo Cap",
+            MoveType::RPromoCap => "R Promo Cap",
+            MoveType::BPromoCap => "B Promo Cap",
+            MoveType::QPromoCap => "Q Promo Cap",
+            MoveType::Ep => "Ep",
+        })
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct Move(u32);
 
 impl Move {
     #[inline]
-    pub fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: u32) -> Move {
+    pub fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: MoveType) -> Move {
         //dbg!(from, to, piece, xpiece, move_type);
-        Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type)
+        Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type as u32)
     }
 
     pub fn new_from_u32(m: u32) -> Move { Move(m) }
@@ -54,12 +104,13 @@ impl Move {
     }
 
     #[inline]
-    pub fn move_type(&self) -> u32 {
-        self.0 & 0xF
+    pub fn move_type(&self) -> MoveType {
+        // shh no unsafe here ...
+        unsafe { std::mem::transmute_copy(&(self.0 & 0xF)) }
     }
 
     #[inline]
-    pub fn all(&self) -> (usize, usize, usize, usize, u32) {
+    pub fn all(&self) -> (usize, usize, usize, usize, MoveType) {
         (self.from() as usize, self.to() as usize, self.piece() as usize, self.xpiece() as usize, self.move_type())
     }
 
@@ -75,36 +126,38 @@ impl Move {
 
         let promo_piece = (promo.unwrap_or(12)) as u32;
 
-        let piece = get_piece(b, from);
-        let mut xpiece = get_xpiece(b, to);
+        let piece = get_piece(b, from)
+            .expect(&format!("couldnt find piece on square {} on board:\n{b}", SQ_NAMES[from as usize]));
 
-        let mut move_type = QUIET;
 
-        if piece < 2 && (from as i32 - to as i32).abs() == 16 {
-            move_type = DOUBLE;
-        } else if piece == 10 || piece == 11 {
-            if (from as i32 - to as i32) == -2 {
-                move_type = KINGSIDE + b.colour_to_move as u32;
-            } else if (from as i32 - to as i32) == 2 {
-                move_type = QUEENSIDE + b.colour_to_move as u32;
+        let mut move_type = MoveType::Quiet;
+
+        if piece < 2 && from.abs_diff(to) == 16 {
+            move_type = MoveType::Double;
+        } else if (piece == 10 || piece == 11) && from.abs_diff(to) == 2 {
+            if from < to {
+                move_type = if b.colour_to_move == 0 { MoveType::WKingSide } else { MoveType::BKingSide };
+            } else if from > to {
+                move_type = if b.colour_to_move == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide };
             }
         }
 
-        if xpiece < 12 && promo_piece < 12 {
+        let mut xpiece = get_xpiece(b, to).unwrap_or(12);
+        if  xpiece < 12 && promo_piece < 12 {
             match promo_piece {
-                2 | 3 => move_type = N_PROMO_CAP,
-                4 | 5 => move_type = R_PROMO_CAP,
-                6 | 7 => move_type = B_PROMO_CAP,
-                8 | 9 => move_type = Q_PROMO_CAP,
+                2 | 3 => move_type = MoveType::NPromoCap,
+                4 | 5 => move_type = MoveType::RPromoCap,
+                6 | 7 => move_type = MoveType::BPromoCap,
+                8 | 9 => move_type = MoveType::QPromoCap,
                 _ => panic!("promo_piece {promo_piece} not an available promo piece"),
             }
         } else if promo_piece < 12 {
-            move_type = PROMO;
+            move_type = MoveType::Promo;
             xpiece = promo_piece;
         } else if xpiece < 2 && to == b.ep as u32 {
-            move_type = EP;
+            move_type = MoveType::Ep;
         } else if xpiece < 12 {
-            move_type = CAP;
+            move_type = MoveType::Cap;
         }
 
         Move::new(from, to, piece, xpiece, move_type)
@@ -113,15 +166,15 @@ impl Move {
     pub fn as_uci_string(&self) -> String {
         let mut mv = String::new();
 
-        let (f,t,p,x,m) = self.all();
+        let (f,t,_,x,m) = self.all();
 
         mv.push_str(SQ_NAMES[f]);
         mv.push_str(SQ_NAMES[t]);
-        if m > 6 && m < 12 {
-            let promo_piece = if m == 7 {
+        if m as u32 > 6 && (m as u32) < 12 {
+            let promo_piece = if m == MoveType::Promo {
                 x as u32
             } else {
-                m - 6
+                (m as u32) - 6
             };
 
             mv.push_str(&text_from_promo_piece(promo_piece));
@@ -135,8 +188,8 @@ impl Display for Move {
         let (fr,t,p,x,m) = self.all();
 
         write!(
-            f, "From: {} ({})\tTo:{} ({})\tPiece: {} ({})\tXPiece: {} ({})\tMove Type: {} ({})",
-            fr, SQ_NAMES[fr], t, SQ_NAMES[t], p, PIECE_NAMES[p], x, PIECE_NAMES[x], m, MTYPE_STRS[m as usize]
+            f, "From: {} ({})\tTo:{} ({})\tPiece: {} ({})\tXPiece: {} ({})\tMove Type: {}",
+            fr, SQ_NAMES[fr], t, SQ_NAMES[t], p, PIECE_NAMES[p], x, PIECE_NAMES[x], m 
         )
     }
 }
@@ -212,12 +265,13 @@ impl KillerMoves {
     }
 
     // returns an option containing an i32 for move scoring or none
-    pub fn get_move(&self, m: Move, depth: usize) -> Option<i32> {
-        self.killer_moves.get(depth).and_then(|killers| {
-            killers.0.and_then(|_| Some(2+CAP_SCORE_OFFSET))
-                .or_else(|| killers.1.and_then(|_| Some(1+CAP_SCORE_OFFSET)))
-
-        })
+    pub fn get_move_score(&self, m: Move, depth: usize) -> Option<i32> {
+        self.killer_moves.get(depth)
+            .and_then(|(k1, k2)| {
+                if &Some(m) == k1 { Some(CAP_SCORE_OFFSET+1) }
+                else if &Some(m) == k2 { Some(CAP_SCORE_OFFSET) }
+                else { None }
+            })
     }
 }
 

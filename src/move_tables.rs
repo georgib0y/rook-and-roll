@@ -1,50 +1,94 @@
-#![allow(unused)]
-use crate::board::Board;
-use crate::move_info::{
-    BISHOP_MAGIC, BISHOP_MASK, FA, FB, FG, FH, R1, R3, R6, R8, RAYS, ROOK_MAGIC, ROOK_MASK, SQUARES,
-};
-use crate::moves::Move;
-use crate::print_bb;
+use crate::move_info::*;
 use rand::prelude::*;
-use std::sync::Arc;
 
 pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
 
-#[derive(Clone)]
-pub struct MoveTables {
-    pub pawn_attacks: Box<[[u64; 64]]>,
-    pub knight_moves: Box<[u64]>,
-    pub king_moves: Box<[u64]>,
-    pub rook_moves: Box<[[u64; 4096]]>,
-    pub bishop_moves: Box<[[u64; 512]]>,
-    pub superrays: Box<[u64]>,
-    pub rays: &'static [[u64; 65]; 8],
-}
+pub static mut MOVE_TABLE: MoveTables = MoveTables::empty();
 
-impl MoveTables {
-    pub fn new() -> MoveTables {
-        MoveTables {
-            pawn_attacks: gen_pawn_attack_table(),
-            knight_moves: gen_knight_move_table(),
-            king_moves: gen_king_move_table(),
-            rook_moves: gen_rook_move_table(),
-            bishop_moves: gen_bishop_move_table(),
-            superrays: gen_superray(),
-            rays: &RAYS,
+pub struct MT;
+
+impl MT {
+    pub fn init() {
+        unsafe {
+            MOVE_TABLE.pawn_attacks = gen_pawn_attack_table();
+            MOVE_TABLE.knight_moves = gen_knight_move_table();
+            MOVE_TABLE.king_moves = gen_king_move_table();
+            MOVE_TABLE.rook_moves = gen_rook_move_table();
+            MOVE_TABLE.bishop_moves = gen_bishop_move_table();
+            MOVE_TABLE.superrays = gen_superray();
         }
     }
 
-    pub fn new_arc() -> Arc<MoveTables> {
-        Arc::new(MoveTables::new())
+    pub fn pawn_attacks(colour: usize, sq: usize) -> u64 {
+        unsafe { *MOVE_TABLE.pawn_attacks.get_unchecked(sq + colour*64) }
+    }
+
+    pub fn knight_moves(sq: usize) -> u64 {
+        unsafe { *MOVE_TABLE.knight_moves.get_unchecked(sq) }
+    }
+
+    pub fn king_moves(sq: usize) -> u64 {
+        unsafe { *MOVE_TABLE.king_moves.get_unchecked(sq) }
+    }
+
+    pub fn rook_moves(occ: u64, sq: usize) -> u64 {
+        unsafe { MOVE_TABLE.get_rook_moves(occ, sq) }
+    }
+
+    pub fn rook_xray_moves(occ: u64, blockers: u64, sq: usize) -> u64 {
+        unsafe { MOVE_TABLE.get_rook_xray(occ, blockers, sq) }
+    }
+
+    pub fn bishop_moves(occ: u64, sq: usize) -> u64 {
+        unsafe { MOVE_TABLE.get_bishop_moves(occ, sq) }
+    }
+
+    pub fn bishop_xray_moves(occ: u64, blockers: u64, sq: usize) -> u64 {
+        unsafe { MOVE_TABLE.get_bishop_xray(occ, blockers, sq) }
+    }
+
+    pub fn rays(dir: usize, sq: usize) -> u64 {
+
+        unsafe { *RAYS.get_unchecked(dir).get_unchecked(sq) }
+    }
+
+    pub fn superrays(sq: usize) -> u64 {
+        unsafe { *MOVE_TABLE.superrays.get_unchecked(sq) }
+    }
+
+}
+
+#[derive(Clone)]
+pub struct MoveTables {
+    pub pawn_attacks: Vec<u64>,
+    pub knight_moves: Vec<u64>,
+    pub king_moves: Vec<u64>,
+    pub rook_moves: Vec<[u64; 4096]>,
+    pub bishop_moves: Vec<[u64; 512]>,
+    pub superrays: Vec<u64>,
+}
+
+impl MoveTables {
+    pub const fn empty() -> MoveTables {
+        MoveTables {
+            pawn_attacks: Vec::new(),
+            knight_moves: Vec::new(),
+            king_moves: Vec::new(),
+            rook_moves: Vec::new(),
+            bishop_moves: Vec::new(),
+            superrays: Vec::new(),
+        }
     }
 
     #[inline]
     pub fn get_rook_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
-        occupancy &= ROOK_MASK[sq];
-        occupancy = occupancy.wrapping_mul(ROOK_MAGIC[sq]);
-        occupancy >>= 64 - R_BIT;
-        self.rook_moves[sq][occupancy as usize]
+        unsafe {
+            occupancy &= ROOK_MASK.get_unchecked(sq);
+            occupancy = occupancy.wrapping_mul(*ROOK_MAGIC.get_unchecked(sq));
+            occupancy >>= 64 - R_BIT;
+            *self.rook_moves.get_unchecked(sq).get_unchecked(occupancy as usize)
+        }
     }
 
     #[inline]
@@ -63,32 +107,34 @@ impl MoveTables {
 
     #[inline]
     pub fn get_bishop_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
-        occupancy &= BISHOP_MASK[sq];
-        occupancy = occupancy.wrapping_mul(BISHOP_MAGIC[sq]);
-        occupancy >>= 64 - B_BIT;
-        self.bishop_moves[sq][occupancy as usize]
+        unsafe {
+            occupancy &= BISHOP_MASK.get_unchecked(sq);
+            occupancy = occupancy.wrapping_mul(*BISHOP_MAGIC.get_unchecked(sq));
+            occupancy >>= 64 - B_BIT;
+            *self.bishop_moves.get_unchecked(sq).get_unchecked(occupancy as usize)
+        }
     }
 }
 
-fn gen_pawn_attack_table() -> Box<[[u64; 64]]> {
-    let mut pawn_attacks = vec![[0; 64]; 2];
+fn gen_pawn_attack_table() -> Vec<u64> {
+    let mut pawn_attacks = vec![0; 64*2];
 
     for (i, sq) in SQUARES.iter().enumerate().take(64) {
         //white
         if sq & !R8 > 0 {
-            pawn_attacks[0][i] = (sq & !FA) << 7 | (sq & !FH) << 9;
+            pawn_attacks[i] = (sq & !FA) << 7 | (sq & !FH) << 9;
         }
 
         //black
         if sq & !R1 > 0 {
-            pawn_attacks[1][i] = (sq & !FH) >> 7 | (sq & !FA) >> 9;
+            pawn_attacks[i+64] = (sq & !FH) >> 7 | (sq & !FA) >> 9;
         }
     }
 
-    pawn_attacks.into_boxed_slice()
+    pawn_attacks
 }
 
-fn gen_knight_move_table() -> Box<[u64]> {
+fn gen_knight_move_table() -> Vec<u64> {
     let mut knight_moves = vec![0; 64];
 
     for index in 0..64 {
@@ -106,10 +152,10 @@ fn gen_knight_move_table() -> Box<[u64]> {
         knight_moves[index] = mv;
     }
 
-    knight_moves.into_boxed_slice()
+    knight_moves
 }
 
-fn gen_king_move_table() -> Box<[u64]> {
+fn gen_king_move_table() -> Vec<u64> {
     let mut king_moves = vec![0; 64];
 
     for index in 0..64 {
@@ -129,10 +175,10 @@ fn gen_king_move_table() -> Box<[u64]> {
         king_moves[index] = mv;
     }
 
-    king_moves.into_boxed_slice()
+    king_moves
 }
 
-fn gen_rook_move_table() -> Box<[[u64; 4096]]> {
+fn gen_rook_move_table() -> Vec<[u64; 4096]> {
     let mut rook_moves = vec![[0; 4096]; 64];
     for sq in 0..64 {
         for blocker_idx in 0..(1 << R_BIT) {
@@ -148,10 +194,10 @@ fn gen_rook_move_table() -> Box<[[u64; 4096]]> {
         }
     }
 
-    rook_moves.into_boxed_slice()
+    rook_moves
 }
 
-fn gen_bishop_move_table() -> Box<[[u64; 512]]> {
+fn gen_bishop_move_table() -> Vec<[u64; 512]> {
     let mut bishop_moves = vec![[0; 512]; 64];
     for sq in 0..64 {
         for blocker_idx in 0..(1 << B_BIT) {
@@ -166,10 +212,10 @@ fn gen_bishop_move_table() -> Box<[[u64; 512]]> {
         }
     }
 
-    bishop_moves.into_boxed_slice()
+    bishop_moves
 }
 
-fn gen_superray() -> Box<[u64]> {
+fn gen_superray() -> Vec<u64> {
     let mut superray = vec![0; 64];
     for (sq, sray) in superray.iter_mut().enumerate().take(64){
         *sray = RAYS[0][sq]
@@ -182,14 +228,15 @@ fn gen_superray() -> Box<[u64]> {
             | RAYS[7][sq]
     }
 
-    superray.into_boxed_slice()
+    superray
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // FOLLOWING CODE IS FROM https://www.chessprogramming.org/Looking_for_Magics
 // only used for generating the magic numbers (not used in actual running)
 
-fn rand_few_bit_u64() -> u64 {
-    let mut rng = rand::thread_rng();
+fn _rand_few_bit_u64() -> u64 {
+    let mut rng = thread_rng();
     let count = 3;
 
     let mut randoms = Vec::with_capacity(count);
@@ -219,7 +266,7 @@ const BIT_TABLE: [i32; 64] = [
 fn pop_1st_bit(bb: &mut u64) -> i32 {
     let b = *bb ^ (*bb - 1);
     let fold: u32 = ((b & 0xffffffff) ^ (b >> 32)) as u32;
-    *bb &= (*bb - 1);
+    *bb &= *bb - 1;
     BIT_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize]
 }
 
@@ -336,14 +383,14 @@ pub fn batt(sq: i32, block: u64) -> u64 {
     result
 }
 
-fn transform(b: u64, magic: u64, bits: i32) -> usize {
+fn _transform(b: u64, magic: u64, bits: i32) -> usize {
     (b.wrapping_mul(magic) >> (64 - bits)) as usize
 }
 
-pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
+pub fn _find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
     let mut a: [u64; 4096] = [0; 4096];
     let mut b: [u64; 4096] = [0; 4096];
-    let mut used: [u64; 4096] = [0; 4096];
+    let mut used: [u64; 4096];
 
     let mask = if bishop {
         BISHOP_MASK[sq as usize]
@@ -363,7 +410,7 @@ pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
     }
 
     for _ in 0..100000000 {
-        let magic = rand_few_bit_u64();
+        let magic = _rand_few_bit_u64();
         if (mask.wrapping_mul(magic) & 0xFF00000000000000).count_ones() < 6 {
             continue;
         }
@@ -374,7 +421,7 @@ pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
                 break;
             }
 
-            let j = transform(b[i], magic, m);
+            let j = _transform(b[i], magic, m);
             if used[j] == 0 {
                 used[j] = a[i];
             } else if used[j] != a[i] {
@@ -390,16 +437,16 @@ pub fn find_magic(sq: i32, m: i32, bishop: bool) -> u64 {
     0
 }
 
-pub fn print_new_magics() {
+pub fn _print_new_magics() {
     println!("pub const ROOK_MAGIC: [u64; 64] = [");
     for sq in 0..64 {
-        println!("\t{:#X},", find_magic(sq, R_BIT, false));
+        println!("\t{:#X},", _find_magic(sq, R_BIT, false));
     }
     println!("];\n");
 
     println!("pub const BISHOP_MAGIC: [u64; 64] = [");
     for sq in 0..64 {
-        println!("\t{:#X},", find_magic(sq, B_BIT, true));
+        println!("\t{:#X},", _find_magic(sq, B_BIT, true));
     }
     println!("];");
 }
