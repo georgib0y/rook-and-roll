@@ -1,5 +1,5 @@
-use std::sync::atomic::Ordering;
-use std::sync::{Arc, RwLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{RwLock};
 use crate::eval::{CHECKMATE, MATED};
 use crate::Move;
 use crate::search::MAX_DEPTH;
@@ -8,6 +8,7 @@ const TTABLE_SIZE: usize = 1 << 20; // 2^20
 const TT_IDX_MASK: u64 = 0xFFFFF;
 // const TTABLE_SIZE: usize = 65536; // 2^16
 // const TT_IDX_MASK: u64  = 0xFFFF;
+
 
 pub const ORDER: Ordering = Ordering::SeqCst;
 
@@ -32,7 +33,7 @@ impl TTEntry {
     pub fn get_score(&self, hash: u64, alpha: i32, beta: i32, depth: usize, ply: i32) -> Option<i32> {
         if self.hash != hash || self.depth < depth { return None; }
 
-        // if checkmate adjust the score so that it includes the amoiunt of plies up until
+        // if checkmate adjust the score so that it includes the amount of plies up until
         // this point, the checkmate score should be stored so that it reflects the distance
         // between the mated node and this current one (not all the way up to the root)
         let score = adjust_score_retrieve(self.score, ply);
@@ -53,7 +54,7 @@ fn adjust_score_insert(score: i32, ply: i32) -> i32 {
 
 // https://www.ics.uci.edu/~eppstein/180a/990202a.html
 fn adjust_score_retrieve(score: i32, ply: i32) -> i32 {
-    if score > MATED - MAX_DEPTH as i32 { score - ply}
+    if score > MATED - MAX_DEPTH as i32 { score - ply }
     else if score < CHECKMATE + MAX_DEPTH as i32 { score + ply }
     else { score }
 }
@@ -61,12 +62,16 @@ fn adjust_score_retrieve(score: i32, ply: i32) -> i32 {
 // sequential transposition table
 pub struct SeqTT {
     ttable: Box<[Option<TTEntry>]>,
+    pub hits: usize,
+    pub misses: usize,
 }
 
 impl SeqTT {
     pub fn new() -> SeqTT {
         SeqTT {
             ttable: (0..TTABLE_SIZE).map(|_| None).collect(),
+            hits: 0,
+            misses: 0,
         }
     }
 
@@ -93,9 +98,20 @@ impl SeqTT {
         // as opposed to the checkmate from the root
         let score = adjust_score_insert(score, ply as i32);
 
-        self.ttable[(hash & TT_IDX_MASK) as usize] = Some(TTEntry {
-            hash, score, e_type, depth, best
-        });
+        // self.ttable[(hash & TT_IDX_MASK) as usize] = Some(TTEntry {
+        //     hash, score, e_type, depth, best
+        // });
+
+        if let Some(entry) = self.ttable[(hash & TT_IDX_MASK) as usize]{
+            if entry.hash == hash && entry.depth > depth { return; }
+            self.ttable[(hash & TT_IDX_MASK) as usize] = Some(TTEntry {
+                hash, score, e_type, depth, best
+            });
+        } else {
+            self.ttable[(hash & TT_IDX_MASK) as usize] = Some(TTEntry {
+                hash, score, e_type, depth, best
+            });
+        }
     }
 
     pub fn clear(&mut self) {
@@ -106,12 +122,16 @@ impl SeqTT {
 // parallel transposition table
 pub struct ParaTT {
     ttable: Box<[RwLock<Option<TTEntry>>]>,
+    pub hits: AtomicUsize,
+    pub misses: AtomicUsize,
 }
 
 impl ParaTT {
     pub fn new() -> ParaTT {
         ParaTT {
             ttable: (0..TTABLE_SIZE).map(|_| RwLock::new(None)).collect(),
+            hits: AtomicUsize::new(0),
+            misses: AtomicUsize::new(0),
         }
     }
 
@@ -141,12 +161,19 @@ impl ParaTT {
     ) {
         // if checkmate make the score only the distance between this node and the checkmate
         // as opposed to the checkmate from the root
-        let adjusted_score = if score >= MATED { score + ply as i32 }
-        else if score <= CHECKMATE { score - ply as i32 }
-        else { score };
 
-        let entry = Some(TTEntry { hash, score: adjusted_score, e_type, depth, best });
-        *self.ttable[(hash & TT_IDX_MASK) as usize].write().unwrap() = entry;
+        let score = adjust_score_insert(score, ply as i32);
+        let mut lock = self.ttable[(hash & TT_IDX_MASK) as usize]
+            .write()
+            .unwrap();
+
+        if let Some(entry) = lock.as_mut() {
+            if entry.depth > depth { return; }
+            *entry = TTEntry { hash, score, e_type, depth, best }
+        } else {
+            *lock = Some(TTEntry { hash, score, e_type, depth, best });
+        }
+
     }
 
     pub fn clear(&self) {

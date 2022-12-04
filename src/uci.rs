@@ -1,38 +1,39 @@
 use std::io;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Error, ErrorKind};
 use crate::{Board, Move, SeqTT};
 use log::{info};
-use std::process::exit;
 use std::sync::Arc;
-use crate::moves::{KillerMoves, PrevMoves};
+use crate::moves::{AtomicHistoryTable, HistoryTable, KillerMoves, PrevMoves};
 use crate::search::iterative_deepening;
 use crate::smp::lazy_smp;
-use crate::tt::ParaTT;
+use crate::tt::{ParaTT};
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, Ucinewgame};
 
-pub struct GameState {
+pub struct GameStateSeq {
     author: String,
     bot_name: String,
     board: Board,
     tt: SeqTT,
     km: KillerMoves,
-    prev_moves: Option<PrevMoves>
+    prev_moves: Option<PrevMoves>,
+    history_table: HistoryTable
 }
 
-impl GameState {
-    pub fn new(author: &str, bot_name: &str) -> GameState {
-        GameState {
+impl GameStateSeq {
+    pub fn new(author: &str, bot_name: &str) -> GameStateSeq {
+        GameStateSeq {
             author: author.to_string(),
             bot_name: bot_name.to_string(),
             board: Board::new(),
             tt: SeqTT::new(),
             km: KillerMoves::new(),
-            prev_moves: None
+            prev_moves: Some(PrevMoves::new()),
+            history_table: HistoryTable::new()
         }
     }
 }
 
-impl Uci for GameState {
+impl Uci for GameStateSeq {
     fn ucinewgame(&mut self) {
         self.tt.clear();
         self.board = Board::new();
@@ -41,7 +42,13 @@ impl Uci for GameState {
     }
 
     fn find_best_move(&mut self) -> Option<Move> {
-        iterative_deepening( &self.board, &mut self.tt, &mut self.km, self.prev_moves.take().unwrap() )
+        iterative_deepening(
+            &self.board,
+            &mut self.tt,
+            &mut self.km,
+            self.prev_moves.take().unwrap(),
+            &mut self.history_table
+        )
     }
 
     fn author(&self) -> &str { &self.author }
@@ -62,6 +69,7 @@ pub struct GameStateMT {
     tt: Arc<ParaTT>,
     km: KillerMoves,
     prev_moves: Option<PrevMoves>,
+    history_table: Arc<AtomicHistoryTable>,
     num_threads: usize
 }
 
@@ -73,7 +81,8 @@ impl GameStateMT {
             board: Board::new(),
             tt: Arc::new(ParaTT::new()),
             km: KillerMoves::new(),
-            prev_moves: None,
+            prev_moves: Some(PrevMoves::new()),
+            history_table: Arc::new(AtomicHistoryTable::new()),
             num_threads
         }
     }
@@ -92,6 +101,7 @@ impl Uci for GameStateMT {
             &self.board,
             Arc::clone(&self.tt),
             self.prev_moves.take().unwrap(),
+            Arc::clone(&self.history_table),
             self.num_threads
         )
     }

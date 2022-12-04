@@ -9,15 +9,13 @@ pub static mut MOVE_TABLE: MoveTables = MoveTables::empty();
 pub struct MT;
 
 impl MT {
-    pub fn init() {
-        unsafe {
-            MOVE_TABLE.pawn_attacks = gen_pawn_attack_table();
-            MOVE_TABLE.knight_moves = gen_knight_move_table();
-            MOVE_TABLE.king_moves = gen_king_move_table();
-            MOVE_TABLE.rook_moves = gen_rook_move_table();
-            MOVE_TABLE.bishop_moves = gen_bishop_move_table();
-            MOVE_TABLE.superrays = gen_superray();
-        }
+    pub unsafe fn init() {
+        MOVE_TABLE.pawn_attacks = gen_pawn_attack_table();
+        MOVE_TABLE.knight_moves = gen_knight_move_table();
+        MOVE_TABLE.king_moves = gen_king_move_table();
+        MOVE_TABLE.rook_moves = gen_rook_move_table();
+        MOVE_TABLE.bishop_moves = gen_bishop_move_table();
+        MOVE_TABLE.superrays = gen_superray();
     }
 
     pub fn pawn_attacks(colour: usize, sq: usize) -> u64 {

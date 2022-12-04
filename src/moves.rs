@@ -13,10 +13,12 @@ ep, last castle state and last halfmove can all be stored in search - aha not wi
 use crate::move_info::SQ_NAMES;
 use crate::Board;
 use std::fmt::{Display, Formatter};
+use std::sync::atomic::AtomicU32;
 use crate::board::PIECE_NAMES;
 // use crate::move_scorer::CAP_SCORE_OFFSET;
 use crate::movegen::{CAP_SCORE_OFFSET, get_piece, get_xpiece};
 use crate::search::MAX_DEPTH;
+use crate::tt::ORDER;
 
 const PREV_MOVE_SIZE: usize = 16384;
 const PREV_MOVE_MASK: u64 = 0x3FFF;
@@ -48,6 +50,18 @@ impl MoveType {
     #[inline]
     pub fn queenside(ctm: usize) -> MoveType {
         if ctm == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide }
+    }
+
+    pub fn is_promo(&self) -> bool {
+        match self {
+            MoveType::Promo |
+            MoveType::NPromoCap |
+            MoveType::BPromoCap |
+            MoveType::RPromoCap |
+            MoveType::QPromoCap => true,
+
+            _ => false
+        }
     }
 }
 
@@ -81,7 +95,7 @@ impl Move {
         Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type as u32)
     }
 
-    pub fn new_from_u32(m: u32) -> Move { Move(m) }
+    pub fn _new_from_u32(m: u32) -> Move { Move(m) }
 
     #[inline]
     pub fn from(&self) -> u32 {
@@ -119,7 +133,7 @@ impl Move {
         let to = sq_from_text(&text[2..4]) as u32;
 
         let promo = if text.len() == 5 {
-            Some(promo_piece_from_text(&text[4..]) + b.colour_to_move)
+            Some(promo_piece_from_text(&text[4..]) + b.ctm)
         } else {
             None
         };
@@ -136,9 +150,9 @@ impl Move {
             move_type = MoveType::Double;
         } else if (piece == 10 || piece == 11) && from.abs_diff(to) == 2 {
             if from < to {
-                move_type = if b.colour_to_move == 0 { MoveType::WKingSide } else { MoveType::BKingSide };
+                move_type = if b.ctm == 0 { MoveType::WKingSide } else { MoveType::BKingSide };
             } else if from > to {
-                move_type = if b.colour_to_move == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide };
+                move_type = if b.ctm == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide };
             }
         }
 
@@ -154,7 +168,7 @@ impl Move {
         } else if promo_piece < 12 {
             move_type = MoveType::Promo;
             xpiece = promo_piece;
-        } else if xpiece < 2 && to == b.ep as u32 {
+        } else if piece < 2 && to == b.ep as u32 {
             move_type = MoveType::Ep;
         } else if xpiece < 12 {
             move_type = MoveType::Cap;
@@ -275,4 +289,53 @@ impl KillerMoves {
     }
 }
 
-// TODO Could have a root order list that uses iter to change the score of every
+
+pub trait HTable {
+    fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32;
+}
+
+pub struct HistoryTable {
+    history: Vec<[[u32; 64]; 64]>
+}
+
+impl HistoryTable {
+    pub fn new() -> HistoryTable {
+        let mut history = Vec::with_capacity(2 * 64 * 64);
+        history.push([[0; 64]; 64]);
+        history.push([[0; 64]; 64]);
+        HistoryTable { history }
+    }
+
+    pub fn insert(&mut self, colour_to_move: usize, from: usize, to: usize, depth: usize) {
+        self.history[colour_to_move][from][to] += (depth * depth) as u32
+    }
+}
+
+impl HTable for HistoryTable {
+    fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32 {
+        self.history[colour_to_move][from][to]
+    }
+}
+
+pub struct AtomicHistoryTable {
+    history: Vec<AtomicU32>
+}
+
+impl AtomicHistoryTable {
+    pub fn new() -> AtomicHistoryTable {
+        let mut history = Vec::with_capacity(2 * 64 * 64);
+        (0..2 * 64 * 64).for_each(|_| history.push(AtomicU32::new(0)));
+        AtomicHistoryTable { history }
+    }
+
+    pub fn insert(&self, colour_to_move: usize, from: usize, to: usize, depth: usize) {
+        self.history[colour_to_move*64*64 + from*64 + to]
+            .store((depth*depth) as u32, ORDER)
+    }
+}
+
+impl HTable for AtomicHistoryTable {
+    fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32 {
+        self.history[colour_to_move*64*64 + from*64 + to].load(ORDER)
+    }
+}

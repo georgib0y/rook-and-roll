@@ -1,13 +1,12 @@
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc};
 use std::sync::atomic::{AtomicBool, AtomicUsize};
-use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Instant;
 use log::info;
 use crate::board::Board;
-use crate::movegen::{is_legal_move, MoveList};
-use crate::moves::{KillerMoves, Move, PrevMoves};
-use crate::search::{MAX_DEPTH, MAX_TIME, Search, Searcher};
+use crate::movegen::{is_legal_move, MoveSet};
+use crate::moves::{AtomicHistoryTable, HTable, KillerMoves, Move, PrevMoves};
+use crate::search::{MAX_DEPTH, MAX_TIME, MIN_SCORE, Searcher};
 use crate::tt::{EntryType, ORDER, ParaTT};
 
 // use rayon::prelude::*;
@@ -18,62 +17,58 @@ use crate::tt::{EntryType, ORDER, ParaTT};
 // then we can iterate though the workers thread to join the deepest thread that isnt None
 /////////////////////////////////////////////
 
-fn spawn_thread(
-    board: Board,
-    depth: usize,
-    tx: Sender<(usize, i32, Option<Move>, usize)>,
-    mut searcher: SmpSearcher
-) {
-    thread::spawn(move || {
-        let (best_score, best_move) = searcher.root_negamax(&board, depth);
-        tx.send( (depth, best_score, best_move, searcher.nodes))
-    });
-}
-
-pub fn lazy_smp(board: &Board, tt: Arc<ParaTT>, prev_moves: PrevMoves, num_threads: usize) -> Option<Move> {
+pub fn lazy_smp(
+    board: &Board,
+    tt: Arc<ParaTT>,
+    prev_moves: PrevMoves,
+    history_table: Arc<AtomicHistoryTable>,
+    num_threads: usize
+) -> Option<Move> {
     let start = Instant::now();
     let abort_flag = Arc::new(AtomicBool::new(false));
 
-    let mut best_move = None;
+    let mut best_move: Option<Move> = None;
+    let mut best_score = MIN_SCORE;
+
     let total_nodes = Arc::new(AtomicUsize::new(0));
 
     let mut threads = Vec::with_capacity(num_threads);
 
     'iter_deep: for depth in 1..=MAX_DEPTH {
-        let mut best_score = i32::MIN;
-        if start.elapsed().as_millis() > MAX_TIME {
-        }
+        if start.elapsed().as_millis() > MAX_TIME { break; }
 
         // spawn n threads at a particular depth
-        for _ in 0..num_threads {
-            let mut searcher = SmpSearcher::new(
-                Arc::clone(&tt),
-                KillerMoves::new(),
+        for t in 0..num_threads-1 {
+            let mut helper = SmpSearcher::new(
+                &tt,
                 prev_moves.clone(),
-                Arc::clone(&abort_flag)
+                &history_table,
+                &abort_flag,
+                t != 0
             );
 
             let b = board.clone();
             let nodes = Arc::clone(&total_nodes);
 
             threads.push(thread::spawn(move || {
-                let res = searcher.root_negamax(&b, depth);
-                nodes.fetch_add(searcher.nodes, ORDER);
-                res
+                // let res = helper.root_negamax(&b, best_score, depth);
+                // nodes.fetch_add(helper.nodes, ORDER);
+                // res
             }))
         }
 
         // try to join threads, but if they go over the time then end early
+        //todo redo this may have introduced bug cant remember what this does due to lack of bugs
         for thread in threads.drain(0..) {
             loop {
                 if thread.is_finished() {
-                    let (score, m) = thread.join().unwrap();
-                    if score > best_score && m.is_some() {
-                        best_score = score;
-                        best_move = m;
-                    }
-                    break;
-
+                    // if let Some( (score, m) ) = thread.join().unwrap(){
+                    //     if score > best_score && m.is_some() {
+                    //         best_score = score;
+                    //         best_move = m;
+                    //     }
+                    // }
+                    // break;
                 } else if start.elapsed().as_millis() > MAX_TIME {
                     abort_flag.store(true, ORDER);
                     break 'iter_deep;
@@ -97,115 +92,40 @@ pub fn lazy_smp(board: &Board, tt: Arc<ParaTT>, prev_moves: PrevMoves, num_threa
     best_move
 }
 
-pub fn _lazy_smp(
-    board: &Board,
-    tt: Arc<ParaTT>,
-    km: &KillerMoves,
-    prev_moves: &PrevMoves,
-    num_threads: usize
-) -> Option<Move> {
-    let (tx, rx) = mpsc::channel();
-
-    let start = Instant::now();
-    let abort_flag = Arc::new(AtomicBool::new(false));
-
-    let mut best_move = None;
-    let mut best_depth = 0;
-    let mut best_score = i32::MIN;
-    let mut total_nodes = 0;
-
-    let mut active_threads = 0;
-    let mut depth = 0;
-
-    // while we still have time:
-    // spawn a thread in an increased depth if active_threads is less than num_threads
-    // then see if any threads have sent any results to the receiver
-    while start.elapsed().as_millis() < MAX_TIME && depth < MAX_DEPTH {
-        if active_threads < num_threads {
-            active_threads += 1;
-            depth += 1;
-
-            let searcher = SmpSearcher::new(
-                Arc::clone(&tt),
-                km.clone(),
-                prev_moves.clone(),
-                Arc::clone(&abort_flag)
-            );
-            println!("Spawning thread at depth: {depth}");
-            spawn_thread(board.clone(), depth, tx.clone(), searcher);
-        }
-
-
-
-        if let Ok((iter_depth, iter_score, iter_move, nodes)) = rx.try_recv() {
-            println!("\tdepth: {iter_depth}, score: {iter_score}, move: {}, nodes: {nodes}, active_threads: {active_threads}",
-                iter_move.map_or("None".to_string(), |m| m.as_uci_string())
-            );
-
-            active_threads -= 1;
-            total_nodes += nodes;
-            if iter_move.is_none() { continue; }
-
-            let elapsed = start.elapsed().as_millis() as f64;
-            let mut nps = nodes as f64 / (elapsed / 1000f64);
-            if nps.is_infinite() { nps = 0f64; } // so that there is no divide by 0 err
-
-            let info = format!("info depth {iter_depth} score cp {iter_score} nps {} pv {}",
-                               (nps) as usize,
-                               iter_move.unwrap().as_uci_string()
-            );
-
-            info!(target: "output", "{}", info);
-            println!("{}", info);
-
-            if iter_depth > best_depth {
-                best_depth = iter_depth;
-                best_move = iter_move;
-                best_score = iter_score;
-            }
-        }
-    }
-
-    // set the abort flag for all other threads
-    abort_flag.store(true, ORDER);
-
-    let elapsed = start.elapsed().as_millis() as f64;
-    let mut nps = total_nodes as f64 / (elapsed / 1000f64);
-    if nps.is_infinite() { nps = 0f64; } // so that there is no divide by 0 err
-
-    let info = format!("info depth {best_depth} score cp {best_score} nps {} pv {}",
-                       (nps) as usize,
-                       best_move.unwrap().as_uci_string()
-    );
-
-    info!(target: "output", "{}", info);
-    println!("{}", info);
-
-    best_move
-}
 
 struct SmpSearcher {
     tt: Arc<ParaTT>,
     km: KillerMoves,
     prev_moves: PrevMoves,
+    history_table: Arc<AtomicHistoryTable>,
     nodes: usize,
     abort: Arc<AtomicBool>,
+    move_set: MoveSet
 }
 
 impl SmpSearcher {
     fn new(
-        tt: Arc<ParaTT>,
-        km: KillerMoves,
+        tt: &Arc<ParaTT>,
         prev_moves: PrevMoves,
-        abort: Arc<AtomicBool>
+        history_table: &Arc<AtomicHistoryTable>,
+        abort: &Arc<AtomicBool>,
+        helper: bool
     ) -> SmpSearcher {
         SmpSearcher {
-            tt, km, prev_moves, nodes: 0, abort
+            tt: Arc::clone(tt),
+            km: KillerMoves::new(),
+            prev_moves,
+            history_table: Arc::clone(history_table),
+            nodes: 0,
+            abort: Arc::clone(abort),
+            move_set: if helper { MoveSet::Random } else { MoveSet::All }
         }
     }
 }
 
 impl <'a> Searcher<'a> for SmpSearcher {
+    type History = AtomicHistoryTable;
+
     fn add_prev_move(&mut self, hash: u64) {
         self.prev_moves.add(hash)
     }
@@ -224,11 +144,37 @@ impl <'a> Searcher<'a> for SmpSearcher {
 
     fn has_aborted(&self) -> bool { self.abort.load(ORDER) }
 
+    fn move_set_order(&self) -> MoveSet {
+        self.move_set
+    }
+
     fn km(&self) -> &KillerMoves { &self.km }
 
     fn km_mut(&mut self) -> &mut KillerMoves { &mut self.km }
 
     fn prev_moves(&self) -> &PrevMoves { &self.prev_moves }
+
+    fn history_add(&mut self, colour_to_move: usize, from: usize, to: usize, depth: usize) {
+        self.history_table.insert(colour_to_move, from, to, depth)
+    }
+
+    fn history_get(&self, colour_to_move: usize, from: usize, to: usize) -> u32 {
+        self.history_table.get(colour_to_move, from, to)
+    }
+
+    fn history_table(&self) -> &Self::History {
+        &*self.history_table
+    }
+
+    fn tt_hit(&mut self) {self.tt.hits.fetch_add(1, ORDER); }
+    fn tt_miss(&mut self) {self.tt.misses.fetch_add(1, ORDER); }
+
+    fn tt_hit_rate(&self) -> f64 {
+        let hits = self.tt.hits.load(ORDER) as f64;
+        let misses = self.tt.misses.load(ORDER) as f64;
+
+        (hits / (hits + misses)) * 100.0
+    }
 
     fn tt_get_score(&self, hash: u64, depth: usize, alpha: i32, beta: i32, ply: usize) -> Option<i32> {
         self.tt.get_score(hash, depth, alpha, beta, ply)

@@ -14,14 +14,15 @@ impl Perft {
             prev_moves: PrevMoves::new()
         }
     }
-
+    
+    #[allow(unused)]
     pub fn perft(&mut self, board: &Board, depth: usize) {
         if depth == 0 {
             self.mc += 1;
             return;
         }
-        let move_set = MoveSet::get_move_set(board);
-        let move_list = MoveList::get_moves(board, move_set, None);
+        let move_set = MoveSet::get_move_set(MoveSet::All, board);
+        let move_list = MoveList::get_moves_unscored(board, move_set);
 
         for m in move_list.moves {
             let b = board.copy_make(m);
@@ -40,8 +41,8 @@ impl Perft {
         }
 
         let mut total = 0;
-        let move_set = MoveSet::get_move_set(&board);
-        let move_list = MoveList::get_moves(&board, move_set, None);
+        let move_set = MoveSet::get_move_set(MoveSet::All, &board);
+        let move_list = MoveList::get_moves_unscored(&board, move_set);
 
         for m in move_list.moves {
             let b = board.copy_make(m);
@@ -61,8 +62,8 @@ impl Perft {
         }
 
         let mut move_count = 0;
-        let move_set = MoveSet::get_move_set(board);
-        let move_list = MoveList::get_moves(board, move_set, None);
+        let move_set = MoveSet::get_move_set(MoveSet::All, board);
+        let move_list = MoveList::get_moves_unscored(board, move_set);
 
         for m in move_list.moves {
             let b = board.copy_make(m);
