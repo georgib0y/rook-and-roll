@@ -1,12 +1,11 @@
-use std::cmp::max;
 use crate::eval::{eval, CHECKMATE, STALEMATE, PIECE_VALUES, MATED};
 use crate::{Board, Move, SeqTT};
 use log::info;
 use std::time::Instant;
-use crate::board::{gen_hash, KING, PAWN};
+use crate::board::{KING, PAWN};
 use crate::movegen::{is_in_check, is_legal_move, moved_into_check, MoveList, MoveSet};
 use crate::moves::{HistoryTable, HTable, KillerMoves, MoveType, PrevMoves};
-use crate::tt::EntryType;
+use crate::tt::{EntryType, TT};
 use crate::tt::EntryType::{Alpha, Beta, PV};
 
 pub const MAX_DEPTH: usize = 50;
@@ -14,7 +13,7 @@ pub const MAX_DEPTH: usize = 50;
 pub const MAX_TIME: u128 = 5000;
 // pub const MAX_TIME: u128 = 30000;
 // pub const MAX_TIME: u128 = u128::MAX;
-const MAX_QUIESCE_DEPTH: usize = 10;
+// const MAX_QUIESCE_DEPTH: usize = 10;
 
 pub const MIN_SCORE: i32 = CHECKMATE * 2;
 const MAX_SCORE: i32 = -MIN_SCORE;
@@ -26,7 +25,7 @@ pub fn iterative_deepening(
     mut prev_moves: PrevMoves,
     history_table: &mut HistoryTable
 ) -> Option<Move> {
-    let mut searcher = Search::new(tt, km, &mut prev_moves, history_table);
+    let mut searcher = Searcher::new(tt, km, &mut prev_moves, history_table);
     searcher.start = Instant::now();
     searcher.nodes = 0;
 
@@ -51,7 +50,7 @@ pub fn iterative_deepening(
 
         let nps = searcher.nodes / (searcher.start.elapsed().as_secs()+1);
 
-        let mut info = format!("info depth {depth} score cp {best_score} nps {} tbhits {:.0} pv {}", nps, searcher.tt_hit_rate(), best_move.unwrap().as_uci_string() );
+        let info = format!("info depth {depth} score cp {best_score} nps {} tbhits {:.0} pv {}", nps, searcher.tt_hit_rate(), best_move.unwrap().as_uci_string() );
 
         // let mut b = board.copy_make(best_move.unwrap());
         // while let Some(m) = searcher.tt_get_best_move(b.hash) {
@@ -66,7 +65,7 @@ pub fn iterative_deepening(
     best_move
 }
 
-pub trait Searcher<'a> {
+pub trait Searches<'a> {
     fn root_negamax(
         &mut self,
         board: &'a Board,
@@ -270,8 +269,22 @@ pub trait Searcher<'a> {
     fn tt_get_best_move(&self, hash: u64) -> Option<Move>;
 }
 
+// struct _Searcher<T, U> {
+//     board: Board,
+//     tt: T,
+//     km: KillerMoves,
+//     nodes: u64,
+//     start: Instant,
+//     prev_moves: PrevMoves,
+//     abort: U
+// }
+//
+// impl<T, U> _Searcher<T, U> {
+//     pub fn new(board: Board, tt: s)
+// }
+//
 
-pub struct Search <'a> {
+pub struct Searcher<'a> {
     tt: &'a mut SeqTT,
     km: &'a mut KillerMoves,
     nodes: u64,
@@ -281,21 +294,21 @@ pub struct Search <'a> {
     abort: bool
 }
 
-impl <'a> Search <'a> {
+impl <'a> Searcher<'a> {
     pub fn new(
         tt: &'a mut SeqTT,
         km: &'a mut KillerMoves,
         prev_moves: &'a mut PrevMoves,
         history_table: &'a mut HistoryTable
-    ) -> Search <'a> {
-        Search { tt, km, nodes: 0, start: Instant::now(), prev_moves, history_table, abort: false }
+    ) -> Searcher<'a> {
+        Searcher { tt, km, nodes: 0, start: Instant::now(), prev_moves, history_table, abort: false }
     }
 
     // fn is_timeout(&self) -> bool { self.start.elapsed().as_millis() > MAX_TIME }
     fn can_start_iter(&self) -> bool { self.start.elapsed().as_millis() < (MAX_TIME / 2) }
 }
 
-impl <'a> Searcher<'a> for Search<'a> {
+impl <'a> Searches<'a> for Searcher<'a> {
     type History = HistoryTable;
 
     fn add_prev_move(&mut self, hash: u64) {

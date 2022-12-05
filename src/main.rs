@@ -2,7 +2,7 @@
 // extern crate core;
 
 use std::env::args;
-use std::fs::{File, remove_file};
+use std::fs::{File};
 use std::time::Instant;
 
 use simplelog::{Config, LevelFilter, WriteLogger};
@@ -11,7 +11,7 @@ use crate::board::Board;
 use crate::move_info::PST;
 use crate::move_tables::MT;
 use crate::movegen::{MoveList, MoveSet};
-use crate::moves::{Move, MoveType};
+use crate::moves::{Move};
 use crate::perft::Perft;
 use crate::tt::SeqTT;
 use crate::uci::{GameStateSeq, GameStateMT, Uci};
@@ -45,7 +45,6 @@ fn do_perftree() {
 
 pub fn init() {
     unsafe {
-        PST::init();
         Zorb::init();
         MT::init();
     }
@@ -114,10 +113,10 @@ fn _debug() {
 
 
 fn _do_search() {
-    let pos = "fen r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7 moves e2e4 c8g4 b1d2 d8c8 d1c2 e7e5 b2b3 g4h3 g2h3 c8h3 a2a3 f6g4 c1b2 g7h6 b3b4 h6d2 c2d2 a7a6 b4b5 a6b5 c4b5 c6a5 d2e2 c7c6 a3a4 a5b3 a1a3 f7f5 e2c2 f5e4 c2b3 g8g7 b5c6 e4f3 b3b7 g7f6 b2e5 f6f5 b7d7 f5g5 d7e7 g5f5 e7d7 f5g5 d7e7";
+    let _pos = "fen r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7 moves e2e4 c8g4 b1d2 d8c8 d1c2 e7e5 b2b3 g4h3 g2h3 c8h3 a2a3 f6g4 c1b2 g7h6 b3b4 h6d2 c2d2 a7a6 b4b5 a6b5 c4b5 c6a5 d2e2 c7c6 a3a4 a5b3 a1a3 f7f5 e2c2 f5e4 c2b3 g8g7 b5c6 e4f3 b3b7 g7f6 b2e5 f6f5 b7d7 f5g5 d7e7 g5f5 e7d7 f5g5 d7e7";
     // let fen = "r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7";
 
-    let mut state_mt = GameStateMT::new("","", 12);
+    let mut _state_mt = GameStateMT::new("","", 12);
     // *state_mt.board() = Board::new_fen(fen);
 
     // let mut state = GameState::new("","");

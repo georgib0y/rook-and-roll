@@ -7,12 +7,12 @@ use crate::uci::{GameStateSeq, Uci};
 pub fn wac_tests() {
     let wacs = read_to_string("./wac").unwrap();
     let mut unmatched_ids = Vec::new();
-    let num_tests = 1;
+    let num_tests = 20;
     let mut tested = 0;
 
     let mut game_state = GameStateSeq::new("", "");
 
-    for line in wacs.lines().take(num_tests) {
+    for line in wacs.lines() {//.take(num_tests) {
         if line.trim().is_empty() { break; }
         let (position, wac_id) = line.split_once("; ").unwrap();
         // id == WAC.001

@@ -6,7 +6,7 @@ use log::info;
 use crate::board::Board;
 use crate::movegen::{is_legal_move, MoveSet};
 use crate::moves::{AtomicHistoryTable, HTable, KillerMoves, Move, PrevMoves};
-use crate::search::{MAX_DEPTH, MAX_TIME, MIN_SCORE, Searcher};
+use crate::search::{MAX_DEPTH, MAX_TIME, MIN_SCORE, Searches};
 use crate::tt::{EntryType, ORDER, ParaTT};
 
 // use rayon::prelude::*;
@@ -123,7 +123,7 @@ impl SmpSearcher {
     }
 }
 
-impl <'a> Searcher<'a> for SmpSearcher {
+impl <'a> Searches<'a> for SmpSearcher {
     type History = AtomicHistoryTable;
 
     fn add_prev_move(&mut self, hash: u64) {

@@ -212,142 +212,21 @@ pub const RAYS: [[u64; 65]; 8] = [
 ];
 
 // all PST are considered from whites perspective
-// pub const _PST: [&[i8]; 14] = [
-//     &WPAWN_PT, &BPAWN_PT, &WKNIGHT_PT, &BKNIGHT_PT, &WROOK_PT, &BROOK_PT, &WBISHOP_PT, &BBISHOP_PT,
-//     &WQUEEN_PT, &BQUEEN_PT, &WKING_MID_PT, &BKING_MID_PT, &WKING_END_PT, &BKING_END_PT,
-// ];
-//
-// pub const WPAWN_PT: [i8; 64] = [
-//     0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, -20, -20, 10, 10, 5, 5, -5, -10, 0, 0, -10, -5, 5, 0, 0, 0, 20, 20, 0, 0, 0, 5, 5, 10, 25, 25, 10, 5, 5, 10, 10, 20, 30, 30, 20, 10, 10, 50, 50, 50, 50, 50, 50, 50, 50, 0, 0, 0, 0, 0, 0, 0, 0,
-// ];
-//
-// pub const WKNIGHT_PT: [i8; 64] = [
-//     -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 5, 5, 0, -20, -40, -30, 5, 10, 15, 15, 10, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 10, 15, 15, 10, 0, -30, -40, -20, 0, 0, 0, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
-// ];
-//
-// pub const WROOK_PT: [i8; 64] = [
-//     0, 0, 0, 5, 5, 0, 0, 0, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, 5, 10, 10, 10, 10, 10, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0,
-// ];
-//
-// pub const WBISHOP_PT: [i8; 64] = [
-//     -20, -10, -10, -10, -10, -10, -10, -20, -10, 5, 0, 0, 0, 0, 5, -10, -10, 10, 10, 10, 10, 10, 10, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 5, 10, 10, 5, 0, -10, -10, 0, 0, 0, 0, 0, 0, -10, -20, -10, -10, -10, -10, -10, -10, -20,
-// ];
-//
-// pub const WQUEEN_PT: [i8; 64] = [
-//     -20, -10, -10, -5, -5, -10, -10, -20,
-//     -10, 0, 0, 0, 0, 0, 0, -10,
-//     -10, 0, 5, 5, 5, 5, 0, -10,
-//     -5, 0, 5, 5, 5, 5, 0, -5,
-//     -5, 0, 5, 5, 5, 5, 0, 0,
-//     -10, 5, 5, 5, 5, 5, 0, -10,
-//     -10, 0, 5, 0, 0, 0, 0, -10,
-//     -20, -10, -10, -5, -5, -10, -10, -20,
-// ];
-//
-// pub const WKING_MID_PT: [i8; 64] = [
-//     20, 30, 10, 0, 0, 10, 30, 20, 20, 20, 0, 0, 0, 0, 20, 20, -10, -20, -20, -20, -20, -20, -20, -10, -20, -30, -30, -40, -40, -30, -30, -20, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30,
-// ];
-//
-// pub const WKING_END_PT: [i8; 64] = [
-//     -50, -40, -30, -20, -20, -30, -40, -50, -30, -20, -10, 0, 0, -10, -20, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 30, 40, 40, 30, -10, -30, -30, -10, 20, 30, 30, 20, -10, -30, -30, -30, 0, 0, 0, 0, -30, -30, -50, -30, -30, -30, -30, -30, -30, -50,
-// ];
-//
-// pub const BPAWN_PT: [i8; 64] = [
-//     0, 0, 0, 0, 0, 0, 0, 0, -50, -50, -50, -50, -50, -50, -50, -50, -10, -10, -20, -30, -30, -20, -10, -10, -5, -5, -10, -25, -25, -10, -5, -5, 0, 0, 0, -20, -20, 0, 0, 0, -5, 5, 10, 0, 0, 10, 5, -5, -5, -10, -10, 20, 20, -10, -10, -5, 0, 0, 0, 0, 0, 0, 0, 0,
-// ];
-//
-// pub const BKNIGHT_PT: [i8; 64] = [
-//     50, 40, 30, 30, 30, 30, 40, 50, 40, 20, 0, 0, 0, 0, 20, 40, 30, 0, -10, -15, -15, -10, 0, 30, 30, -5, -15, -20, -20, -15, -5, 30, 30, 0, -15, -20, -20, -15, 0, 30, 30, -5, -10, -15, -15, -10, -5, 30, 40, 20, 0, -5, -5, 0, 20, 40, 50, 40, 30, 30, 30, 30, 40, 50,
-// ];
-//
-// pub const BROOK_PT: [i8; 64] = [
-//     0, 0, 0, 0, 0, 0, 0, 0, -5, -10, -10, -10, -10, -10, -10, -5, 5, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, -5, -5, 0, 0, 0,
-// ];
-//
-// pub const BBISHOP_PT: [i8; 64] = [
-//     20, 10, 10, 10, 10, 10, 10, 20, 10, 0, 0, 0, 0, 0, 0, 10, 10, 0, -5, -10, -10, -5, 0, 10, 10, -5, -5, -10, -10, -5, -5, 10, 10, 0, -10, -10, -10, -10, 0, 10, 10, -10, -10, -10, -10, -10, -10, 10, 10, -5, 0, 0, 0, 0, -5, 10, 20, 10, 10, 10, 10, 10, 10, 20,
-// ];
-//
-// pub const BQUEEN_PT: [i8; 64] = [
-//     20, 10, 10, 5, 5, 10, 10, 20,
-//     10, 0, -5, 0, 0, 0, 0, 10,
-//     10, -5, -5, -5, -5, -5, 0, 10,
-//     5, 0, -5, -5, -5, -5, 0, 0,
-//     5, 0, -5, -5, -5, -5, 0, 5,
-//     10, 0, -5, -5, -5, -5, 0, 10,
-//     10, 0, 0, 0, 0, 0, 0, 10,
-//     20, 10, 10, 5, 5, 10, 10, 20,
-// ];
-//
-// pub const BKING_MID_PT: [i8; 64] = [
-//     30, 40, 40, 50, 50, 40, 40, 30, 30, 40, 40, 50, 50, 40, 40, 30, 30, 40, 40, 50, 50, 40, 40, 30, 30, 40, 40, 50, 50, 40, 40, 30, 20, 30, 30, 40, 40, 30, 30, 20, 10, 20, 20, 20, 20, 20, 20, 10, -20, -20, 0, 0, 0, 0, -20, -20, -20, -30, -10, 0, 0, -10, -30, -20,
-// ];
-//
-// pub const BKING_END_PT: [i8; 64] = [
-//     50, 30, 30, 30, 30, 30, 30, 50, 30, 30, 0, 0, 0, 0, 30, 30, 30, 10, -20, -30, -30, -20, 10, 30, 30, 10, -30, -40, -40, -30, 10, 30, 30, 10, -30, -40, -40, -30, 10, 30, 30, 10, -20, -30, -30, -20, 10, 30, 30, 20, 10, 0, 0, 10, 20, 30, 50, 40, 30, 20, 20, 30, 40, 50,
-// ];
-
 pub struct PST;
 
 impl PST {
-    pub unsafe fn init() {
-        let bpsts = [
-            &mut BPAWN_MID_PST,
-            &mut BKNIGHT_MID_PST,
-            &mut BROOK_MID_PST,
-            &mut BKNIGHT_MID_PST,
-            &mut BQUEEN_MID_PST,
-            &mut BKING_MID_PST,
-            &mut BPAWN_END_PST,
-            &mut BKNIGHT_END_PST,
-            &mut BROOK_END_PST,
-            &mut BKNIGHT_END_PST,
-            &mut BQUEEN_END_PST,
-            &mut BKING_END_PST,
-        ];
-        let wpsts = [
-            WPAWN_MID_PST,
-            WKNIGHT_MID_PST,
-            WROOK_MID_PST,
-            WKNIGHT_MID_PST,
-            WQUEEN_MID_PST,
-            WKING_MID_PST,
-            WPAWN_END_PST,
-            WKNIGHT_END_PST,
-            WROOK_END_PST,
-            WKNIGHT_END_PST,
-            WQUEEN_END_PST,
-            WKING_END_PST
-        ];
-
-        for (wpst, bpst) in wpsts.iter().zip(bpsts) {
-            for (sq, val) in wpst.iter().enumerate() {
-               bpst[sq^56] = -(*val)
-            }
-        }
-
-    }
-
     pub fn mid_pst(mut piece: usize, mut sq: usize) -> i32 {
         let mul = 1 - ( (piece & 1) * 2 ) as i32; // either 1 or -1 depending on piece colour
         sq ^= (piece & 1)*56;
-        piece &= !1; // take the colour out of the piece (only indexes white)
+        piece /= 2; // take the colour out of the piece (only indexes white)
         unsafe { MID_PST[piece][sq] as i32 * mul }
     }
 
     pub fn end_pst(mut piece: usize, mut sq: usize) -> i32 {
         let mul = 1 - ( (piece & 1) * 2 ) as i32; // either 1 or -1 depending on piece colour
         sq ^= (piece & 1)*56;
-        piece &= !1; // take the colour out of the piece (only indexes white)
+        piece /= 2; // take the colour out of the piece (only indexes white)
         unsafe { END_PST[piece][sq] as i32 * mul }
-    }
-
-    pub fn _mid_pst(piece: usize, sq: usize) -> i32 {
-        unsafe { MID_PST[piece][sq] as i32 }
-    }
-
-    pub fn _end_pst(piece: usize, sq: usize) -> i32 {
-        unsafe { END_PST[piece][sq] as i32 }
     }
 }
 
@@ -375,22 +254,22 @@ fn correct_index() {
 
 
 
-static mut MID_PST: [&[i16]; 12] = [
-    &WPAWN_MID_PST,     unsafe { &BPAWN_MID_PST },
-    &WKNIGHT_MID_PST,   unsafe { &BKNIGHT_MID_PST } ,
-    &WROOK_MID_PST,     unsafe { &BROOK_MID_PST },
-    &WBISHOP_MID_PST,   unsafe { &BBISHOP_MID_PST },
-    &WQUEEN_MID_PST,    unsafe { &BQUEEN_MID_PST } ,
-    &WKING_MID_PST,     unsafe { &BKING_MID_PST }
+const MID_PST: [&[i16]; 6] = [
+    &WPAWN_MID_PST,
+    &WKNIGHT_MID_PST,
+    &WROOK_MID_PST,
+    &WBISHOP_MID_PST,
+    &WQUEEN_MID_PST,
+    &WKING_MID_PST
 ];
 
-static mut END_PST: [&[i16]; 12] = [
-    &WPAWN_END_PST,     unsafe { &BPAWN_END_PST },
-    &WKNIGHT_END_PST,   unsafe { &BKNIGHT_END_PST } ,
-    &WROOK_END_PST,     unsafe { &BROOK_END_PST },
-    &WBISHOP_END_PST,   unsafe { &BBISHOP_END_PST },
-    &WQUEEN_END_PST,    unsafe { &BQUEEN_END_PST } ,
-    &WKING_END_PST,     unsafe { &BKING_END_PST }
+const END_PST: [&[i16]; 6] = [
+    &WPAWN_END_PST,
+    &WKNIGHT_END_PST,
+    &WROOK_END_PST,
+    &WBISHOP_END_PST,
+    &WQUEEN_END_PST,
+    &WKING_END_PST,
 ];
 
 const WPAWN_MID_PST: [i16; 64] = [
@@ -524,89 +403,3 @@ const WKING_END_PST: [i16; 64] = [
     -12,  17,  14,  17,  17,  38,  23,  11,
     -74, -35, -18, -18, -11,  15,   4, -17,
 ];
-
-
-static mut BPAWN_MID_PST: [i16; 64] = [0;64];
-
-static mut BPAWN_END_PST: [i16; 64] = [0;64];
-
-static mut BKNIGHT_MID_PST: [i16; 64] = [0;64];
-
-static mut BKNIGHT_END_PST: [i16; 64] = [0;64];
-
-static mut BBISHOP_MID_PST: [i16; 64] = [0;64];
-
-static mut BBISHOP_END_PST: [i16; 64] = [0;64];
-
-static mut BROOK_MID_PST: [i16; 64] = [0;64];
-
-static mut BROOK_END_PST: [i16; 64] = [0;64];
-
-static mut BQUEEN_MID_PST: [i16; 64] = [0;64];
-
-static mut BQUEEN_END_PST: [i16; 64] = [0;64];
-
-static mut BKING_MID_PST: [i16; 64] = [0;64];
-
-static mut BKING_END_PST: [i16; 64] = [0;64];
-
-
-
-// #[test]
-// fn print_black_pst() {
-//     println!("pub const BPAWN_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WPAWN_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-//
-//     println!("pub const BKNIGHT_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WKNIGHT_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-//
-//     println!("pub const BROOK_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WROOK_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-//
-//     println!("pub const BBISHOP_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WBISHOP_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-//
-//     println!("pub const BQUEEN_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WQUEEN_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-//
-//     println!("pub const BKING_MID_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WKING_MID_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-//
-//     println!("pub const BKING_END_PT: [i8;64] = [");
-//     for i in (0..8).rev() {
-//         for sq in WKING_END_PT.iter().skip(i*8).take(8) {
-//             print!("{sq}, ");
-//         }
-//     }
-//     println!("\n];");
-// }

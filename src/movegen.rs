@@ -57,7 +57,7 @@ impl <'a> MoveList <'a> {
         MoveList {
             moves: Vec::with_capacity(move_capacity),
             move_scores: if scored { Some(Vec::with_capacity(move_capacity)) } else { None },
-            move_set: move_set,
+            move_set,
             board,
         }
     }

@@ -1,13 +1,39 @@
+use std::cell::Cell;
 use std::io;
 use std::io::{Error, ErrorKind};
 use crate::{Board, Move, SeqTT};
 use log::{info};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use std::sync::atomic::AtomicUsize;
 use crate::moves::{AtomicHistoryTable, HistoryTable, KillerMoves, PrevMoves};
-use crate::search::iterative_deepening;
+use crate::search::{iterative_deepening, Searches};
 use crate::smp::lazy_smp;
-use crate::tt::{ParaTT};
+use crate::tt::{Entry, ParaTT, TT, TTEntry};
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, Ucinewgame};
+
+pub struct GameState<T: Entry, U: Searches> {
+    author: String,
+    bot_name: String,
+    tt: TT<T>,
+    searcher: U,
+    prev_moves: Option<PrevMoves>,
+    num_threads: usize
+
+}
+
+impl<T: Entry, U: Searches> GameState<T, U> {
+    fn new_single_threaded(author: &str, bot_name: &str) -> GameState<T, U> {
+        GameState {
+            author: author.to_string(),
+            bot_name: bot_name.to_string(),
+            searcher: Se
+            tt: TT::new_single_threaded() }
+    }
+
+    fn new_multi_threaded() -> GameState<T> {
+        GameState { tt: TT::new_multi_threaded() }
+    }
+}
 
 pub struct GameStateSeq {
     author: String,
