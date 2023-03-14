@@ -62,14 +62,16 @@ impl <'a> MoveList <'a> {
         }
     }
 
-    pub fn get_moves<H>(
+    // pub fn get_moves<H>(
+    pub fn get_moves(
         board: &'a Board,
         move_set: MoveSet,
         km: &KillerMoves,
         best_move: Option<Move>,
         depth: usize,
-        hh: &H
-    ) -> MoveList <'a> where H: HTable {
+        // hh: &H
+    ) -> MoveList <'a> {
+        // ) -> MoveList <'a> where H: HTable {
 
         let mut ml = match move_set {
             MoveSet::All | MoveSet::Random =>
@@ -92,7 +94,8 @@ impl <'a> MoveList <'a> {
             // score moves
             ml.moves.iter()
                 .for_each(|m| ml.move_scores.as_mut().unwrap()
-                    .push(score_move(board, *m, km, best_move, depth, hh)));
+                    // .push(score_move(board, *m, km, best_move, depth, hh)));
+                .push(score_move(board, *m, km, best_move, depth)));
         }
 
         ml
@@ -741,14 +744,15 @@ pub fn is_legal_move(board: &Board, m: Move, prev_moves: &PrevMoves) -> bool {
 }
 
 
-fn score_move<H>(
+fn score_move(
+    // fn score_move<H>(
         board: &Board,
         m: Move,
         km: &KillerMoves,
         best_move: Option<Move>,
         depth: usize,
-        _hh: &H
-    ) -> i32 where H: HTable {
+        // _hh: &H
+    ) -> i32 {
         if let Some(best_move) = best_move {
             if best_move == m { return BEST_MOVE_SCORE; }
         } else if let Some(score) = km.get_move_score(m, depth) {

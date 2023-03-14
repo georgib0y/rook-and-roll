@@ -4,6 +4,7 @@ use crate::moves::{Move, MoveType};
 use crate::zorbist::Zorb;
 use std::collections::HashMap;
 use std::fmt;
+use crate::movegen::{get_piece, get_xpiece};
 
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 2;
@@ -59,15 +60,7 @@ impl Board {
         ];
 
         let mut board = Board {
-            pieces,
-            util,
-            ctm: 0,
-            castle_state: 0b1111,
-            ep: 64,
-            halfmove: 0,
-            hash: 0,
-            mg_value: 0,
-            eg_value: 0,
+            pieces, util, ctm: 0, castle_state: 0b1111, ep: 64, halfmove: 0, hash: 0, mg_value: 0, eg_value: 0,
         };
 
         board.hash = gen_hash(board);
@@ -155,9 +148,8 @@ impl Board {
         b
     }
 
-    // TODO debug hashing, dunno how to do that tho
-
     pub fn copy_make(&self, m: Move) -> Board {
+        // println!("{}", self);
         // get info from board
         let (from, to, piece, xpiece, move_type) = m.all();
         let ft = SQUARES[from] | SQUARES[to];
@@ -271,24 +263,9 @@ impl Board {
 
         hash ^= Zorb::colour();
 
-        let board = Board {
-            pieces, util,
-            ctm: self.ctm ^ 1,
-            castle_state,
-            ep,
-            halfmove,
-            hash,
-            mg_value,
-            eg_value
-        };
-
-        // assert_eq!(board.hash, gen_hash(board));
-        // let mat = gen_mat_value(&board);
-        // let (mg_pst, eg_pst) = gen_pst_value(&board);
-        // assert_eq!(board.mg_value, mat+mg_pst);
-        // assert_eq!(board.eg_value, mat+eg_pst);
-
-        board
+        Board {
+            pieces, util, ctm: self.ctm ^ 1, castle_state, ep, halfmove, hash, mg_value, eg_value
+        }
     }
 }
 
@@ -378,56 +355,20 @@ fn inc_value_update() {
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut out = String::new();
+        const SQ_PIECES: [&str;12] = ["P ", "p ", "N ", "n ", "R ", "r ", "B ", "b ", "Q ", "q ", "K ", "k "];
 
-        for i in (1..9).rev() {
-            let s = i.to_string();
-            out.push_str(&s);
-            out.push_str("    ");
-            for sq in SQUARES.iter().skip(i * 8 - 8).take(8) {
-                if (sq & self.pieces[0]) > 0 {
-                    out.push_str("P ");
-                }
-                if (sq & self.pieces[1]) > 0 {
-                    out.push_str("p ");
-                }
-                if (sq & self.pieces[2]) > 0 {
-                    out.push_str("N ");
-                }
-                if (sq & self.pieces[3]) > 0 {
-                    out.push_str("n ");
-                }
-                if (sq & self.pieces[4]) > 0 {
-                    out.push_str("R ");
-                }
-                if (sq & self.pieces[5]) > 0 {
-                    out.push_str("r ");
-                }
-                if (sq & self.pieces[6]) > 0 {
-                    out.push_str("B ");
-                }
-                if (sq & self.pieces[7]) > 0 {
-                    out.push_str("b ");
-                }
-                if (sq & self.pieces[8]) > 0 {
-                    out.push_str("Q ");
-                }
-                if (sq & self.pieces[9]) > 0 {
-                    out.push_str("q ");
-                }
-                if (sq & self.pieces[10]) > 0 {
-                    out.push_str("K ");
-                }
-                if (sq & self.pieces[11]) > 0 {
-                    out.push_str("k ");
-                }
-                if (sq & self.util[2]) == 0 {
-                    out.push_str("- ");
-                }
-            }
-            out.push('\n');
-        }
-        out.push_str("\n     A B C D E F G H\n");
+        let add_sq = |s, sq| format!("{s}{}", get_piece(self, sq)
+            .or(get_xpiece(self, sq))
+            .map_or("- ", |piece| SQ_PIECES[piece as usize])
+        );
+
+        // iterate over every row (56-63, 48-55, ... 0-7) and concat the pieces of that row to the out string
+        let mut out = (0..8).rev().map(|i| (i+1, (i*8..i*8+8)))
+            .fold(String::new(), |out, (row_num, row)|
+                format!("{out}\n{row_num}   {}", row.fold(String::new(), add_sq))
+            );
+
+        out.push_str("\n\n    A B C D E F G H\n");
         write!(f, "{}", out)
     }
 }
@@ -444,30 +385,17 @@ pub fn gen_hash(board: Board) -> u64 {
     }
 
     // if black to move toggle zorb
-    if board.ctm == 1 {
-        hash ^= Zorb::colour();
-    }
-
-    if (board.castle_state & 0b1000) == 8 {
-        hash ^= Zorb::castle_rights(0);
-    }
-    if (board.castle_state & 0b100) == 4 {
-        hash ^= Zorb::castle_rights(1);
-    }
-    if (board.castle_state & 0b10) == 2 {
-        hash ^= Zorb::castle_rights(2);
-    }
-    if (board.castle_state & 0b1) == 1 {
-        hash ^= Zorb::castle_rights(3);
-    }
-
-    if board.ep < 64 {
-        hash ^= Zorb::ep_file(board.ep);
-    }
+    if board.ctm == 1 { hash ^= Zorb::colour(); }
+    if (board.castle_state & 0b1000) == 8 { hash ^= Zorb::castle_rights(0); }
+    if (board.castle_state & 0b100) == 4 { hash ^= Zorb::castle_rights(1); }
+    if (board.castle_state & 0b10) == 2 { hash ^= Zorb::castle_rights(2); }
+    if (board.castle_state & 0b1) == 1 { hash ^= Zorb::castle_rights(3); }
+    if board.ep < 64 { hash ^= Zorb::ep_file(board.ep); }
 
     hash
 }
 
+// macro to print a list of bitboards (u64s) one after each other, v similar to dbg!() but only for bbs
 #[macro_export]
 macro_rules! print_bb {
     ( $( $args:expr ),* ) => {
@@ -496,9 +424,4 @@ pub fn _print_bb(bb: u64) {
     out.push_str("   A  B  C  D  E  F  G  H\n");
 
     println!("{}", out);
-}
-
-#[test]
-fn hashing() {
-    crate::init();
 }
