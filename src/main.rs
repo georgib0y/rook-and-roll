@@ -18,7 +18,7 @@ use crate::moves::{Move};
 use crate::perft::Perft;
 use crate::search::MIN_SCORE;
 use crate::tt::{AtomicTTEntry, EntryType, SeqTT, TT, TTable, TTableMT, TTableST, TTEntry};
-use crate::uci::GameState;
+use crate::uci::{GameState, GameStateST};
 use crate::wac_tester::wac_tests;
 // use crate::wac_tester::wac_tests;
 use crate::zorbist::Zorb;
@@ -37,6 +37,10 @@ mod zorbist;
 mod movegen;
 
 mod wac_tester;
+
+// const LOG_DIR: &str = "/home/george/Documents/progs/rookandroll/logs/last-game.log";
+const LOG_DIR: &str = "/home/george/CLionProjects/rustinator-rook_and_roll/logs/last-game.log";
+
 
 fn do_perftree() {
     let args: Vec<String> = args().collect();
@@ -65,8 +69,9 @@ fn main() {
         return;
     }
 
-    // do_perf();
+    // _do_perf();
     // _do_search();
+    // return;
     // _debug();
     // _do_wac_tests();
     // return;
@@ -75,7 +80,7 @@ fn main() {
     let file = File::options()
         .write(true)
         .truncate(true)
-        .open("/home/george/Documents/progs/rookandroll/logs/last-game.log")
+        .open(LOG_DIR)
         .unwrap();
 
     let _ = WriteLogger::init(
@@ -86,7 +91,7 @@ fn main() {
 
     let author = "george";
     let bot_name = "rustinator2";
-    let num_threads = 8;
+    let num_threads = 1;
 
     if num_threads == 1 {
         GameState::<TTableST>::new_single_threaded(author, bot_name).start();
@@ -223,50 +228,52 @@ fn _debug() {
 // }
 //
 //
-// fn _do_search() {
-//     let _pos = "fen r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7 moves e2e4 c8g4 b1d2 d8c8 d1c2 e7e5 b2b3 g4h3 g2h3 c8h3 a2a3 f6g4 c1b2 g7h6 b3b4 h6d2 c2d2 a7a6 b4b5 a6b5 c4b5 c6a5 d2e2 c7c6 a3a4 a5b3 a1a3 f7f5 e2c2 f5e4 c2b3 g8g7 b5c6 e4f3 b3b7 g7f6 b2e5 f6f5 b7d7 f5g5 d7e7 g5f5 e7d7 f5g5 d7e7";
-//     // let fen = "r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7";
-//
-//     let mut _state_mt = GameStateMT::new("","", 12);
-//     // *state_mt.board() = Board::new_fen(fen);
-//
-//     // let mut state = GameState::new("","");
-//     // *state.board() = Board::new_fen(fen);
-//     // *state.board() = Board::new();
-//
-//     // for m_str in "e2e4 c8g4 b1d2 d8c8 d1c2 e7e5 b2b3 g4h3 g2h3 c8h3 a2a3 f6g4 c1b2 g7h6 b3b4 h6d2 c2d2 a7a6 b4b5 a6b5 c4b5 c6a5 d2e2 c7c6 a3a4 a5b3 a1a3 f7f5 e2c2 f5e4 c2b3 g8g7 b5c6 e4f3 b3b7 g7f6 b2e5 f6f5 b7d7 f5g5 d7e7 g5f5 e7d7 f5g5 d7e7".split(" ") {
-//     //     let m = Move::new_from_text(m_str, state.board());
-//     //     *state.board() = state.board().copy_make(m);
-//     //     println!("{m_str}\n{}", state.board());
-//     // }
-//
-//     // state.position(pos);
-//     //
-//     // let start = Instant::now();
-//     // let best_move = state.find_best_move().unwrap();
-//     // println!("single threaded best move: {}\nTook {}ms\n\n",
-//     //     best_move.as_uci_string(),
-//     //     start.elapsed().as_millis()
-//     // );
-//
-//
-//     //
-//     // for m_str in "f8g7 d1e2 d8c7 c1f4 b7b5 h2h3 b5b4 c3a4 c7a5 b2b3 g4h6 e2e4 a5b5 e4c4 c8e6 c4b5 c6b5 a4c5 a8c8 c5a6 c8c2 f3d4 c2c3 d4b5 c3d3 a6c5 d3d5 b5c7 e8f8 c5e6 f7e6 c7d5 e6d5 a1c1 f8f7 c1c7 h8a8 e1g1 h6f5 f1d1 g6g5 f4g5 g7e5 c7b7 a8g8 d1d5 e5f6 d5f5 g8g5 f5g5 f6g5 b7b4 a7a5 b4c4 g5d2 a2a3 h7h6 g1f1 e7e5 c4c2 d2g5 c2c5 f7e6 c5a5 g5d2 a5a7 e6d6 f1g1 d6c5 a7a6 d2g5 b3b4 c5c4 g1h1 g5d2 a6d6 d2e1 d6e6 c4d5 e6f6 d5c4 f2f4 e5e4 f6e6 c4d4 f4f5 d4d5 b4b5 e1g3 b5b6 h6h5 b6b7 g3b8 e6e8 b8d6 e8d8 d5c6 d8d6 c6d6 b7b8q d6e7 b8e5 e7f7 e5e4 f7f6 g2g3 f6f7 g3g4 h5g4 h3g4 f7f6 a3a4 f6g5 a4a5 g5f6 g4g5 f6g5 f5f6 g5f6 a5a6 f6f7 e4b1 f7e6".split(" ") {
-//     //     let m = Move::new_from_text(m_str, state_mt.board());
-//     //     *state_mt.board() = state_mt.board().copy_make(m);
-//     //     println!("{m_str}\n{}", state_mt.board());
-//     // }
-//     //
-//     let mut game_state = GameStateMT::new("","", 8);
-//     // let mut game_state = GameState::new("","");
-//
-//     let start = Instant::now();
-//     let best_move = game_state.find_best_move().unwrap();
-//     println!("best move: {}\nTook {}ms\n\n",
-//         best_move.as_uci_string(),
-//         start.elapsed().as_millis()
-//     );
-// }
+fn _do_search() {
+    let _pos = "fen r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7 moves e2e4 c8g4 b1d2 d8c8 d1c2 e7e5 b2b3 g4h3 g2h3 c8h3 a2a3 f6g4 c1b2 g7h6 b3b4 h6d2 c2d2 a7a6 b4b5 a6b5 c4b5 c6a5 d2e2 c7c6 a3a4 a5b3 a1a3 f7f5 e2c2 f5e4 c2b3 g8g7 b5c6 e4f3 b3b7 g7f6 b2e5 f6f5 b7d7 f5g5 d7e7 g5f5 e7d7 f5g5 d7e7";
+    // let fen = "r1bq1rk1/ppp1ppbp/2np1np1/8/2P5/3P1NP1/PP2PPBP/RNBQ1RK1 w - - 1 7";
+
+    // let mut _state_mt = GameStateMT::new("","", 12);
+    // *state.board() = Board::new_fen(fen);
+
+    // let mut state = GameState::new("","");
+    // *state.board() = Board::new_fen(fen);
+    // *state.board() = Board::new();
+
+    // for m_str in "e2e4 c8g4 b1d2 d8c8 d1c2 e7e5 b2b3 g4h3 g2h3 c8h3 a2a3 f6g4 c1b2 g7h6 b3b4 h6d2 c2d2 a7a6 b4b5 a6b5 c4b5 c6a5 d2e2 c7c6 a3a4 a5b3 a1a3 f7f5 e2c2 f5e4 c2b3 g8g7 b5c6 e4f3 b3b7 g7f6 b2e5 f6f5 b7d7 f5g5 d7e7 g5f5 e7d7 f5g5 d7e7".split(" ") {
+    //     let m = Move::new_from_text(m_str, state.board());
+    //     *state.board() = state.board().copy_make(m);
+    //     println!("{m_str}\n{}", state.board());
+    // }
+
+    // state.position(pos);
+    //
+    // let start = Instant::now();
+    // let best_move = state.find_best_move().unwrap();
+    // println!("single threaded best move: {}\nTook {}ms\n\n",
+    //     best_move.as_uci_string(),
+    //     start.elapsed().as_millis()
+    // );
+
+
+    //
+    // for m_str in "f8g7 d1e2 d8c7 c1f4 b7b5 h2h3 b5b4 c3a4 c7a5 b2b3 g4h6 e2e4 a5b5 e4c4 c8e6 c4b5 c6b5 a4c5 a8c8 c5a6 c8c2 f3d4 c2c3 d4b5 c3d3 a6c5 d3d5 b5c7 e8f8 c5e6 f7e6 c7d5 e6d5 a1c1 f8f7 c1c7 h8a8 e1g1 h6f5 f1d1 g6g5 f4g5 g7e5 c7b7 a8g8 d1d5 e5f6 d5f5 g8g5 f5g5 f6g5 b7b4 a7a5 b4c4 g5d2 a2a3 h7h6 g1f1 e7e5 c4c2 d2g5 c2c5 f7e6 c5a5 g5d2 a5a7 e6d6 f1g1 d6c5 a7a6 d2g5 b3b4 c5c4 g1h1 g5d2 a6d6 d2e1 d6e6 c4d5 e6f6 d5c4 f2f4 e5e4 f6e6 c4d4 f4f5 d4d5 b4b5 e1g3 b5b6 h6h5 b6b7 g3b8 e6e8 b8d6 e8d8 d5c6 d8d6 c6d6 b7b8q d6e7 b8e5 e7f7 e5e4 f7f6 g2g3 f6f7 g3g4 h5g4 h3g4 f7f6 a3a4 f6g5 a4a5 g5f6 g4g5 f6g5 f5f6 g5f6 a5a6 f6f7 e4b1 f7e6".split(" ") {
+    //     let m = Move::new_from_text(m_str, state_mt.board());
+    //     *state_mt.board() = state_mt.board().copy_make(m);
+    //     println!("{m_str}\n{}", state_mt.board());
+    // }
+    //
+    // let mut game_state = GameStateMT::new("","", 8);
+    // let mut game_state = GameState::new("","");
+
+    let mut game_state = GameStateST::new_single_threaded("", "");
+
+    let start = Instant::now();
+    let best_move = game_state.find_best_move();
+    println!("best move: {}\nTook {}ms\n\n",
+        best_move.as_uci_string(),
+        start.elapsed().as_millis()
+    );
+}
 
 
 fn _do_perf() {

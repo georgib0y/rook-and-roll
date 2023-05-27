@@ -23,7 +23,6 @@ pub enum MoveSet {
     All,
     Attacks,
     Check,
-    Random
 }
 
 impl MoveSet {
@@ -74,7 +73,7 @@ impl <'a> MoveList <'a> {
         // ) -> MoveList <'a> where H: HTable {
 
         let mut ml = match move_set {
-            MoveSet::All | MoveSet::Random =>
+            MoveSet::All =>
                 MoveList::new(board, ALL_CAP, move_set, true)
                     .gen_attacks(NO_SQUARES, ALL_SQUARES, false)
                     .gen_quiet(NO_SQUARES, ALL_SQUARES, false),
@@ -88,22 +87,18 @@ impl <'a> MoveList <'a> {
                     .gen_check(),
         };
 
-        if move_set == MoveSet::Random {
-            (0..ml.moves.len()).for_each(|_| ml.move_scores.as_mut().unwrap().push(0));
-        } else {
-            // score moves
-            ml.moves.iter()
-                .for_each(|m| ml.move_scores.as_mut().unwrap()
-                    // .push(score_move(board, *m, km, best_move, depth, hh)));
-                .push(score_move(board, *m, km, best_move, depth)));
-        }
+        // score moves
+        ml.moves.iter()
+            .for_each(|m| ml.move_scores.as_mut().unwrap()
+                .push(score_move(board, *m, km, best_move, depth))
+            );
 
         ml
     }
 
     pub fn get_moves_unscored(board: &'a Board, move_set: MoveSet) -> MoveList<'a> {
         match move_set {
-            MoveSet::All | MoveSet::Random =>
+            MoveSet::All =>
                 MoveList::new(board, ALL_CAP, move_set, false)
                     .gen_attacks(NO_SQUARES, ALL_SQUARES, false)
                     .gen_quiet(NO_SQUARES, ALL_SQUARES, false),
@@ -613,29 +608,6 @@ impl <'a> MoveList <'a> {
     }
 }
 
-#[test]
-fn random_moves() {
-    crate::init();
-    let board = Board::new();
-
-    let move_length = 5;
-
-    let ml = MoveList {
-        moves: (0..move_length).map(|m| Move::_new_from_u32(m)).collect(),
-        move_scores: Some( (0..move_length).map(|_| 0).collect() ),
-        move_set: MoveSet::Random,
-        board: &board
-    };
-
-    let mut rand_moves = Vec::new();
-    for m in ml {
-        println!("{m}");
-        rand_moves.push(m);
-    }
-    assert_eq!(rand_moves.len(), move_length as usize)
-}
-
-
 impl <'a> Iterator for MoveList<'a> {
     type Item = Move;
 
@@ -649,12 +621,7 @@ impl <'a> Iterator for MoveList<'a> {
         // otherwise return none
 
         // if let Some(m) = self.pop_best_move() { return Some(m); }
-        if self.move_set == MoveSet::Random {
-            self.pop_rand_move()
-            // self.pop_best_move()
-        } else {
-            self.pop_best_move()
-        }
+        self.pop_best_move()
         // None
     }
 }

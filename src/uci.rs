@@ -13,122 +13,8 @@ use std::time::Duration;
 use rayon::max_num_threads;
 use crate::moves::{AtomicHistoryTable, HistoryTable, KillerMoves, PrevMoves};
 use crate::search::{AbortFlag, iterative_deepening, lazy_smp, Searcher};//, Searches};
-// use crate::smp::lazy_smp;
 use crate::tt::{AtomicTTEntry, Entry, ParaTT, TT, TTable, TTableMT, TTableST, TTEntry};
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, Ucinewgame};
-
-
-
-
-// pub struct GameStateSeq {
-//     author: String,
-//     bot_name: String,
-//     board: Board,
-//     tt: SeqTT,
-//     km: KillerMoves,
-//     prev_moves: Option<PrevMoves>,
-//     history_table: HistoryTable
-// }
-//
-// impl GameStateSeq {
-//     pub fn new(author: &str, bot_name: &str) -> GameStateSeq {
-//         GameStateSeq {
-//             author: author.to_string(),
-//             bot_name: bot_name.to_string(),
-//             board: Board::new(),
-//             tt: SeqTT::new(),
-//             km: KillerMoves::new(),
-//             prev_moves: Some(PrevMoves::new()),
-//             history_table: HistoryTable::new()
-//         }
-//     }
-// }
-//
-// impl Uci for GameStateSeq {
-//     fn ucinewgame(&mut self) {
-//         self.tt.clear();
-//         self.board = Board::new();
-//         self.km = KillerMoves::new();
-//         self.prev_moves = None
-//     }
-//
-//     fn find_best_move(&mut self) -> Option<Move> {
-//         None
-//         // iterative_deepening(
-//         //     &self.board,
-//         //     &mut self.tt,
-//         //     &mut self.km,
-//         //     self.prev_moves.take().unwrap(),
-//         //     &mut self.history_table
-//         // )
-//     }
-//
-//     fn author(&self) -> &str { &self.author }
-//
-//     fn bot_name(&self) -> & str { &self.bot_name }
-//
-//     fn board(&mut self) -> &mut Board { &mut self.board }
-//
-//     fn clear_prev_moves(&mut self) { self.prev_moves = Some(PrevMoves::new()) }
-//
-//     fn prev_moves(&mut self) -> &mut PrevMoves { self.prev_moves.as_mut().unwrap() }
-// }
-
-// pub struct GameStateMT {
-//     author: String,
-//     bot_name: String,
-//     board: Board,
-//     tt: Arc<ParaTT>,
-//     km: KillerMoves,
-//     prev_moves: Option<PrevMoves>,
-//     history_table: Arc<AtomicHistoryTable>,
-//     num_threads: usize
-// }
-//
-// impl GameStateMT {
-//     pub fn new(author: &str, bot_name: &str, num_threads: usize) -> GameStateMT {
-//         GameStateMT {
-//             author: author.to_string(),
-//             bot_name: bot_name.to_string(),
-//             board: Board::new(),
-//             tt: Arc::new(ParaTT::new()),
-//             km: KillerMoves::new(),
-//             prev_moves: Some(PrevMoves::new()),
-//             history_table: Arc::new(AtomicHistoryTable::new()),
-//             num_threads
-//         }
-//     }
-// }
-//
-// impl Uci for GameStateMT {
-//     fn ucinewgame(&mut self) {
-//         self.board = Board::new();
-//         self.tt.clear();
-//         self.km = KillerMoves::new();
-//         self.prev_moves = None
-//     }
-//
-//     fn find_best_move(&mut self) -> Option<Move> {
-//         None
-//         // lazy_smp(
-//         //     &self.board,
-//         //     Arc::clone(&self.tt),
-//         //     self.prev_moves.take().unwrap(),
-//         //     Arc::clone(&self.history_table),
-//         //     self.num_threads
-//         // )
-//     }
-//
-//     fn author(&self) -> &str { &self.author }
-//
-//     fn bot_name(&self) -> &str { &self.bot_name }
-//
-//     fn board(&mut self) -> &mut Board { &mut self.board }
-//
-//     fn clear_prev_moves(&mut self) { self.prev_moves = Some(PrevMoves::new()) }
-//
-//     fn prev_moves(&mut self) -> &mut PrevMoves { self.prev_moves.as_mut().unwrap() }
-// }
 
 enum UciCommand {
     Ucinewgame,
@@ -156,6 +42,10 @@ impl UciCommand {
     }
 }
 
+pub type GameStateST = GameState<TTableST>;
+pub type GameStateMT = GameState<TTableMT>;
+
+
 pub struct GameState<T: TT> {
     author: String,
     bot_name: String,
@@ -165,8 +55,8 @@ pub struct GameState<T: TT> {
     num_threads: usize,
 }
 
-impl<T: TT> GameState<T> {
-    pub fn new_single_threaded(author: &str, bot_name: &str) -> GameState<TTableST> {
+impl GameStateST {
+    pub fn new_single_threaded(author: &str, bot_name: &str) -> GameStateST {
         GameState {
             author: author.to_string(),
             bot_name: bot_name.to_string(),
@@ -176,8 +66,10 @@ impl<T: TT> GameState<T> {
             num_threads: 1,
         }
     }
+}
 
-    pub fn new_multi_threaded(author: &str, bot_name: &str, num_threads: usize) -> GameState<TTableMT> {
+impl GameStateMT {
+    pub fn new_multi_threaded(author: &str, bot_name: &str, num_threads: usize) -> GameStateMT {
         GameState {
             author: author.to_string(),
             bot_name: bot_name.to_string(),
@@ -187,7 +79,9 @@ impl<T: TT> GameState<T> {
             num_threads,
         }
     }
+}
 
+impl<T: TT> GameState<T>{
     pub fn start(&mut self) {
         loop {
             let mut buffer = String::new();
