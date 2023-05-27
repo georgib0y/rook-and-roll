@@ -122,7 +122,7 @@ impl<T: TT> GameState<T>{
                 fen = fen.split_once(" moves").unwrap().0;
             }
             // println!("{fen}");
-            Board::new_fen(fen)
+            Board::new_fen(fen).unwrap()
         } else {
             // if "startpos"
             Board::new()

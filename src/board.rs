@@ -50,97 +50,7 @@ const WQS_STATE: usize = 1;
 const BKS_STATE: usize = 2;
 const BQS_STATE: usize = 3;
 
-fn find_piece_from_name(name: char) -> Option<usize> {
-    match name {
-        'P' => Some(0), 'p' => Some(1),
-        'N' => Some(2), 'n' => Some(3),
-        'R' => Some(4), 'r' => Some(5),
-        'B' => Some(6), 'b' => Some(7),
-        'Q' => Some(8), 'q' => Some(9),
-        'K' => Some(10), 'k' => Some(11),
-        _ => None
-    }
-}
 
-
-
-fn pieces_from_fen(fen: &str) -> Result<[u64; 12], InvalidFenError> {
-    let fen_pieces = fen.split(" ")
-        .nth(0)
-        .ok_or(InvalidFenError::new(fen))?;
-
-    let mut pieces = [0; 12];
-
-    fen_pieces.split("/").collect::<Vec<_>>()
-        .iter().rev()
-        .enumerate()
-        .for_each(|(i, row)| {
-            let mut idx = i*8;
-            for sq in row.chars() {
-                if let Some(piece) = find_piece_from_name(sq) {
-                    pieces[piece] ^= SQUARES[idx];
-                    idx += 1;
-                } else if '1' <= sq && sq <= '8' {
-                    idx += sq as usize - '0' as usize;
-                }
-            }
-        });
-
-    Ok(pieces)
-}
-
-fn ctm_from_fen(fen: &str) -> Result<usize, InvalidFenError> {
-    let ctm = fen.split(" ")
-        .nth(1)
-        .ok_or(InvalidFenError::new(fen))?;
-
-    match ctm { "w" => Ok(0), "b" => Ok(1), _ => Err(InvalidFenError::new(fen)) }
-}
-
-fn castle_state_from_fen(fen: &str) -> Result<u8, InvalidFenError> {
-    let castle_state_str = fen.split(" ")
-        .nth(2)
-        .ok_or(InvalidFenError::new(fen))?;
-
-    match castle_state_str {
-        "KQkq" => Ok(0b1111), "KQk" => Ok(0b1110),
-        "KQq" => Ok(0b1101), "KQ" => Ok(0b1100),
-        "Kkq" => Ok(0b1011), "Kk" => Ok(0b1010),
-        "Kq" => Ok(0b1001), "K" => Ok(0b1000),
-        "Qkq" => Ok(0b0111), "Qk" => Ok(0b0110),
-        "Qq" => Ok(0b0101), "Q" => Ok(0b0100),
-        "kq" => Ok(0b0011), "k" => Ok(0b0010),
-        "q" => Ok(0b0001), "-" => Ok(0b0000),
-        _ => Err(InvalidFenError::new(fen)),
-    }
-}
-
-fn ep_sq_from_fen(fen: &str) -> Result<usize, InvalidFenError> {
-    let ep_sq = fen.split(" ")
-        .nth(3)
-        .ok_or(InvalidFenError::new(fen))?;
-
-    if ep_sq.contains('-') { return Ok(64); }
-
-    // convert file letter to 0-7 value
-    let file_char = ep_sq.chars().nth(0).ok_or(InvalidFenError::new(fen))?;
-    let file = file_char as usize - 'a' as usize;
-    // convert rank to 0-7 value
-    let rank_char = ep_sq.chars().nth(1).ok_or(InvalidFenError::new(fen))?;
-    let rank = rank_char as usize - '1' as usize;
-
-    Ok(rank * 8 + file)
-}
-
-fn halfmove_from_fen(fen: &str) -> Result<Option<usize>, InvalidFenError> {
-    let Some(halfmove_str) = fen.split(" ").nth(4) else {
-        return Ok(None);
-    };
-
-    let halfmove: usize = halfmove_str.parse().map_err(|_| InvalidFenError::new(fen))?;
-
-    Ok(Some(halfmove))
-}
 
 // 0 - white to move, 1 - black to move
 #[derive(Copy, Clone)]
@@ -179,32 +89,6 @@ impl Board {
         board
     }
 
-    pub fn new_fen(fen: &str) -> Result<Board, InvalidFenError> {
-        let pieces = pieces_from_fen(fen)?;
-        let white =  pieces[0] | pieces[2] | pieces[4] | pieces[6] | pieces[8] | pieces[10];
-        let black = pieces[1] | pieces[3] | pieces[5] | pieces[7] | pieces[9] | pieces[11];
-
-        let mut board = Board {
-            pieces,
-            util: [white, black, white | black],
-            ctm: ctm_from_fen(fen)?,
-            castle_state: castle_state_from_fen(fen)?,
-            ep: ep_sq_from_fen(fen)?,
-            halfmove: halfmove_from_fen(fen)?.unwrap_or(0),
-            hash: 0,
-            mg_value: 0,
-            eg_value: 0,
-        };
-
-        // regen the hash after everything is finished
-        board.hash = gen_hash(board);
-        let mat = gen_mat_value(&board);
-        let (mg, eg) = gen_pst_value(&board);
-        board.mg_value = mat + mg;
-        board.eg_value = mat + eg;
-
-        Ok(board)
-    }
 
     pub fn copy_make(&self, m: Move) -> Board {
         // println!("{}", self);
@@ -443,10 +327,10 @@ pub fn gen_hash(board: Board) -> u64 {
 
     // if black to move toggle zorb
     if board.ctm == 1 { hash ^= Zorb::colour(); }
-    if (board.castle_state & 0b1000) == 8 { hash ^= Zorb::castle_rights(0); }
-    if (board.castle_state & 0b100) == 4 { hash ^= Zorb::castle_rights(1); }
-    if (board.castle_state & 0b10) == 2 { hash ^= Zorb::castle_rights(2); }
-    if (board.castle_state & 0b1) == 1 { hash ^= Zorb::castle_rights(3); }
+    if (board.castle_state & 0b1000) == 8 { hash ^= Zorb::castle_rights(WKS_STATE); }
+    if (board.castle_state & 0b100) == 4 { hash ^= Zorb::castle_rights(WQS_STATE); }
+    if (board.castle_state & 0b10) == 2 { hash ^= Zorb::castle_rights(BKS_STATE); }
+    if (board.castle_state & 0b1) == 1 { hash ^= Zorb::castle_rights(BQS_STATE); }
     if board.ep < 64 { hash ^= Zorb::ep_file(board.ep); }
 
     hash
@@ -482,24 +366,5 @@ pub fn _print_bb(bb: u64) {
 
     println!("{}", out);
 }
-
-#[derive(Debug)]
-pub struct InvalidFenError {
-    fen: String
-}
-
-impl InvalidFenError {
-    pub fn new(fen: &str) -> InvalidFenError {
-        InvalidFenError { fen: fen.to_string() }
-    }
-}
-
-impl Display for InvalidFenError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid fen: {}", self.fen)
-    }
-}
-
-impl Error for InvalidFenError { }
 
 

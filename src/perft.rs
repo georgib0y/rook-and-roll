@@ -33,7 +33,7 @@ impl Perft {
     }
 
     pub fn perftree_root(&self, depth: usize, fen: &str, moves_strs: Option<&String>) {
-        let mut board = Board::new_fen(fen);
+        let mut board = Board::new_fen(fen).unwrap();
         if let Some(moves_str) = moves_strs {
             for m in moves_str.split(' ') {
                 board = board.copy_make(Move::new_from_text(m, &board));
