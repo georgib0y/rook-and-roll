@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use crate::board_builder::BoardBuilder;
 use crate::movegen::{get_piece, get_xpiece};
 
 pub const PAWN: usize = 0;
@@ -45,10 +46,10 @@ const DEFAULT_UTIL: [u64; 3] = [
         DEFAULT_PIECES[7] | DEFAULT_PIECES[9] | DEFAULT_PIECES[11], // all
 ];
 
-const WKS_STATE: usize = 0;
-const WQS_STATE: usize = 1;
-const BKS_STATE: usize = 2;
-const BQS_STATE: usize = 3;
+pub const WKS_STATE: usize = 0;
+pub const WQS_STATE: usize = 1;
+pub const BKS_STATE: usize = 2;
+pub const BQS_STATE: usize = 3;
 
 
 
@@ -96,172 +97,25 @@ impl Board {
         let (from, to, piece, xpiece, move_type) = m.all();
         let ft = SQUARES[from] | SQUARES[to];
 
-        let mut hash = self.hash;
-        hash ^= Zorb::piece(piece, from);
-        hash ^= Zorb::piece(piece, to);
-
-        let mut pieces = self.pieces;
-        pieces[piece] ^= ft;
-
-        let mut util = self.util;
-        util[self.ctm] ^= ft;
-        util[2] ^= ft;
-
-        // toggle ep file if there is one
-        if self.ep < 64 { hash ^= Zorb::ep_file(self.ep); }
-        let mut ep = 64;
-
-        let mut halfmove = self.halfmove + 1;
-
-        let mut mg_value = self.mg_value-PST::mid_pst(piece,from)+PST::mid_pst(piece, to);
-        let mut eg_value = self.eg_value-PST::end_pst(piece,from)+PST::end_pst(piece, to);
+        let mut board_builder = BoardBuilder::new(self, ft, from, to, piece);
 
         match move_type {
             // (piece > 1) as usize == 1 if piece not pawn, so halfmove*1, if pawn halfmove*0 == 0
-            MoveType::Quiet => halfmove *= (piece > 1) as usize,
-
-            MoveType::Double => {
-                ep = to - 8 + (self.ctm * 16);
-                hash ^= Zorb::ep_file(ep);
-                halfmove = 0;
-            }
-
-            MoveType::Cap => {
-                pieces[xpiece] ^= SQUARES[to];
-                util[self.ctm ^ 1] ^= SQUARES[to];
-                util[2] ^= SQUARES[to];
-
-                mg_value -= MAT_SCORES[xpiece] + PST::mid_pst(xpiece, to);
-                eg_value -= MAT_SCORES[xpiece] + PST::end_pst(xpiece, to);
-
-                hash ^= Zorb::piece(xpiece, to);
-                halfmove = 0;
-            }
-
-            MoveType::WKingSide =>
-                update_castling(&mut pieces, &mut util, 0, 7, 5, &mut hash, &mut mg_value, &mut eg_value),
-            MoveType::BKingSide =>
-                update_castling(&mut pieces, &mut util, 1, 63, 61, &mut hash, &mut mg_value, &mut eg_value),
-            MoveType::WQueenSide =>
-                update_castling(&mut pieces, &mut util, 0, 0, 3, &mut hash, &mut mg_value, &mut eg_value),
-            MoveType::BQueenSide =>
-                update_castling(&mut pieces, &mut util, 1, 56, 59, &mut hash, &mut mg_value, &mut eg_value),
-
-            MoveType::Promo => {
-                // toggle the pawn off and the toggled piece on
-                pieces[self.ctm] ^= SQUARES[to];
-                pieces[xpiece] ^= SQUARES[to];
-
-                hash ^= Zorb::piece(piece, to);
-                hash ^= Zorb::piece(xpiece, to);
-
-                mg_value += -MAT_SCORES[piece] + MAT_SCORES[xpiece];
-                mg_value += -PST::mid_pst(piece, to) + PST::mid_pst(xpiece, to);
-                eg_value += -MAT_SCORES[piece] + MAT_SCORES[xpiece];
-                eg_value += -PST::end_pst(piece, to) + PST::end_pst(xpiece, to);
-                halfmove = 0;
-            }
-            MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap | MoveType::QPromoCap => {
-                // N_PROMO_CAP (8) - 7 = [1], [1] * 2 + b.colour_to_move == 2 or 3 (knight idx)
-                // R_PROMO_CAP (9) - 7 = [2], [2] * 2 + b.colour_to_move == 4 or 5 (rook idx) etc
-                let promo_piece = (move_type as usize - 7) * 2 + self.ctm;
-
-                // toggle captured piece
-                pieces[xpiece] ^= SQUARES[to];
-                util[self.ctm ^ 1] ^= SQUARES[to];
-                // retoggle piece (as its been replaced by the capture-er)
-                util[2] ^= SQUARES[to];
-                // toggle pawn off
-                pieces[self.ctm] ^= SQUARES[to];
-                // toggle promo
-                pieces[promo_piece] ^= SQUARES[to];
-
-                hash ^= Zorb::piece(piece, to);
-                hash ^= Zorb::piece(promo_piece, to);
-                hash ^= Zorb::piece(xpiece, to);
-
-                // update mat value (the promo piece - the captured piece and the pre-promoted piece)
-                mg_value += MAT_SCORES[promo_piece] - MAT_SCORES[xpiece] - MAT_SCORES[piece];
-                mg_value += -PST::mid_pst(xpiece, to) - PST::mid_pst(piece, to) + PST::mid_pst(promo_piece, to);
-                eg_value += MAT_SCORES[promo_piece] - MAT_SCORES[xpiece] - MAT_SCORES[piece];
-                eg_value += -PST::end_pst(xpiece, to) - PST::end_pst(piece, to) + PST::end_pst(promo_piece, to);
-                halfmove = 0;
-            }
-            MoveType::Ep => {
-                let ep_sq = to - 8 + (self.ctm * 16);
-                pieces[self.ctm ^ 1] ^= SQUARES[ep_sq]; // toggle capture pawn off
-                util[self.ctm ^ 1] ^= SQUARES[ep_sq];
-                util[2] ^= SQUARES[ep_sq];
-                // dbg!("ep");
-                hash ^= Zorb::piece(self.ctm^1, ep_sq);
-
-                mg_value -= MAT_SCORES[self.ctm^1] + PST::mid_pst(self.ctm^1, ep_sq);
-                eg_value -= MAT_SCORES[self.ctm^1] + PST::end_pst(self.ctm^1, ep_sq);
-                halfmove = 0;
-            }
+            MoveType::Quiet => board_builder.apply_quiet(piece),
+            MoveType::Double => board_builder.apply_double(to),
+            MoveType::Cap => board_builder.apply_cap(xpiece, to),
+            MoveType::WKingSide => board_builder.apply_castle(0, 7, 5),
+            MoveType::BKingSide => board_builder.apply_castle(1, 63, 61),
+            MoveType::WQueenSide => board_builder.apply_castle(0, 0, 3),
+            MoveType::BQueenSide => board_builder.apply_castle(1, 56, 59),
+            MoveType::Promo => board_builder.apply_promo(piece, xpiece, to),
+            MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap | MoveType::QPromoCap =>
+                board_builder.apply_promo_cap(move_type, piece, xpiece, to),
+            MoveType::Ep => board_builder.apply_ep(to)
         }
 
-        let castle_state = update_castle_state(from, to, piece, self.castle_state, &mut hash);
-
-        hash ^= Zorb::colour();
-
-        Board {
-            pieces, util, ctm: self.ctm ^ 1, castle_state, ep, halfmove, hash, mg_value, eg_value
-        }
+        board_builder.build()
     }
-}
-
-fn update_castling(
-    pieces: &mut [u64;12],
-    util: &mut [u64;3],
-    colour: usize,
-    from: usize,
-    to: usize,
-    hash: &mut u64,
-    mg_value: &mut i32,
-    eg_value: &mut i32,
-) {
-    let sqs = SQUARES[from] | SQUARES[to];
-    pieces[ROOK + colour] ^= sqs;
-    util[colour] ^= sqs;
-    util[2] ^= sqs;
-
-    *mg_value += -PST::mid_pst(ROOK + colour, from) + PST::mid_pst(ROOK + colour, to);
-    *eg_value += -PST::end_pst(ROOK + colour, from) + PST::end_pst(ROOK + colour, to);
-
-    *hash ^= Zorb::piece(ROOK + colour, from);
-    *hash ^= Zorb::piece(ROOK + colour, to);
-}
-
-fn update_castle_state(
-    from: usize,
-    to: usize,
-    piece: usize,
-    mut castle_state: u8,
-    hash: &mut u64
-) -> u8 {
-    // stop thinking you can optimise this you have the ifs for the hash
-    if (piece == 10 || from == 7 || to == 7) && castle_state & 0b1000 > 0 {
-        castle_state &= 0b0111;
-        *hash ^= Zorb::castle_rights(WKS_STATE);
-    }
-
-    if (piece == 10 || from == 0 || to == 0) && castle_state & 0b100 > 0 {
-        castle_state &= 0b1011;
-        *hash ^= Zorb::castle_rights(WQS_STATE);
-    }
-
-    if (piece == 11 || from == 63 || to == 63) && castle_state & 0b10 > 0 {
-        castle_state &= 0b1101;
-        *hash ^= Zorb::castle_rights(BKS_STATE);
-    }
-
-    if (piece == 11 || from == 56 || to == 56) && castle_state & 0b1 > 0 {
-        castle_state &= 0b1110;
-        *hash ^= Zorb::castle_rights(BQS_STATE);
-    }
-
-    castle_state
 }
 
 #[test]

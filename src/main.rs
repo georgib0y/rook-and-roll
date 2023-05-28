@@ -38,6 +38,7 @@ mod movegen;
 
 mod wac_tester;
 mod fen;
+mod board_builder;
 
 // const LOG_DIR: &str = "/home/george/Documents/progs/rookandroll/logs/last-game.log";
 const LOG_DIR: &str = "/home/george/CLionProjects/rustinator-rook_and_roll/logs/last-game.log";
