@@ -1,11 +1,8 @@
-use crate::eval::{gen_mat_value, gen_pst_value, MAT_SCORES};
-use crate::move_info::{PST, SQUARES};
+use crate::eval::{gen_mat_value, gen_pst_value};
+use crate::move_info::{SQUARES};
 use crate::moves::{Move, MoveType};
 use crate::zorbist::Zorb;
-use std::collections::HashMap;
-use std::error::Error;
 use std::fmt;
-use std::fmt::{Display, Formatter};
 use crate::board_builder::BoardBuilder;
 use crate::movegen::{get_piece, get_xpiece};
 

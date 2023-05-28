@@ -3,7 +3,7 @@ use rand::prelude::*;
 use crate::board::{Board, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK};
 use crate::eval::PIECE_VALUES;
 use crate::move_info::{FA, FH, R2, R7, SQUARES};
-use crate::moves::{HTable, KillerMoves, Move, MoveType, PrevMoves};
+use crate::moves::{KillerMoves, Move, MoveType, PrevMoves};
 // use crate::move_scorer::{CAP_SCORE_OFFSET, MoveScorer};
 use crate::move_tables::MT;
 
@@ -35,7 +35,7 @@ impl MoveSet {
 // in the iterator, have it filter the illegal moves and request the next chunk (ie call gen_quiet)
 // when needed
 
-pub struct MoveList <'a>{
+pub struct MoveList <'a> {
     pub moves: Vec<Move>,
     move_scores: Option<Vec<i32>>,
     move_set: MoveSet,
@@ -264,8 +264,6 @@ impl <'a> MoveList <'a> {
         self
     }
 
-
-    // TODO maybe a way to cache rook and bishop moves and only query them once or maybe its not worth it
     fn rook_quiet(&mut self, pinned: u64, target: u64) -> &mut MoveList<'a> {
         let piece = 4+self.board.ctm;
         let mut rooks = self.board.pieces[piece] & !pinned;
@@ -524,31 +522,21 @@ impl <'a> MoveList <'a> {
 
         let mut rq = self.board.pieces[ROOK + (self.board.ctm ^ 1)];
         rq |= self.board.pieces[QUEEN + (self.board.ctm ^ 1)];
-
-        let rq_pinners = rq & MT::rook_xray_moves(
-            self.board.util[2],
-            self.board.util[self.board.ctm],
-            ksq
-        );
+        let rq_pinners = rq &
+            MT::rook_xray_moves(self.board.util[2], self.board.util[self.board.ctm], ksq);
 
         let mut bq = self.board.pieces[BISHOP + (self.board.ctm ^ 1)];
         bq |= self.board.pieces[QUEEN + (self.board.ctm ^ 1)];
-
-        let bq_pinners = bq & MT::bishop_xray_moves(
-            self.board.util[2],
-            self.board.util[self.board.ctm],
-            ksq
-        );
+        let bq_pinners = bq &
+            MT::bishop_xray_moves(self.board.util[2], self.board.util[self.board.ctm], ksq);
 
         let mut pinners = rq_pinners | bq_pinners;
         let mut pinned_pieces= 0;
 
         while pinners > 0 {
             let p_sq = pinners.trailing_zeros() as usize;
-
             pinned_pieces |= self.board.util[2] & self.get_ray_inbetween(ksq, p_sq);
             pinned_pieces |= self.board.util[2] & self.get_ray_inbetween(ksq, p_sq);
-
             pinners &= pinners-1;
         }
 
@@ -736,8 +724,6 @@ fn score_move(
                     // PST[m.piece() as usize][m.to() as usize] as i32
                     m.piece() as i32
                 }
-
-
             }
 
             MoveType::Cap | MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap |
@@ -766,10 +752,8 @@ fn see_get_least_valuable(board: &Board, attackers: u64, board_depth: usize) -> 
 
 fn see(board: &Board, m: Move, board_depth: usize) -> i32 {
     // trying to understand the https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
-
     let mut gain: [i32; 32] = [0;32];
     let mut depth = 0;
-
     let (from, to, mut piece, xpiece, _) = m.all();
 
     // froms is a bb of the next possible piece to move that attacks the to square
@@ -782,7 +766,6 @@ fn see(board: &Board, m: Move, board_depth: usize) -> i32 {
     let can_xray = occ ^ board.pieces[KNIGHT] ^ board.pieces[KNIGHT+1];
 
     gain[depth] = PIECE_VALUES[xpiece];
-
     while from_piece > 0 {
         depth += 1;
 
@@ -795,17 +778,12 @@ fn see(board: &Board, m: Move, board_depth: usize) -> i32 {
         occ ^= from_piece;
 
         // recheck if there are any sliding pieces behind this attacker
-        if from_piece & can_xray > 0 {
-            attackers |= occ & get_all_attackers(board, to);
-        }
+        if from_piece & can_xray > 0 { attackers |= occ & get_all_attackers(board, to); }
 
         (piece, from_piece) = see_get_least_valuable(board, attackers, board_depth);
     }
 
     // iterate over all the stored gain values to find the max - negamax style
-    for i in (1..depth).rev() {
-        gain[i-1] = -max(-gain[i-1], gain[i]);
-    }
-
+    for i in (1..depth).rev() { gain[i-1] = -max(-gain[i-1], gain[i]); }
     gain[0]
 }

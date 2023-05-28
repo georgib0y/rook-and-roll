@@ -219,14 +219,14 @@ impl PST {
         let mul = 1 - ( (piece & 1) * 2 ) as i32; // either 1 or -1 depending on piece colour
         sq ^= (piece & 1)*56;
         piece /= 2; // take the colour out of the piece (only indexes white)
-        unsafe { MID_PST[piece][sq] as i32 * mul }
+        MID_PST[piece][sq] as i32 * mul 
     }
 
     pub fn end_pst(mut piece: usize, mut sq: usize) -> i32 {
         let mul = 1 - ( (piece & 1) * 2 ) as i32; // either 1 or -1 depending on piece colour
         sq ^= (piece & 1)*56;
         piece /= 2; // take the colour out of the piece (only indexes white)
-        unsafe { END_PST[piece][sq] as i32 * mul }
+        END_PST[piece][sq] as i32 * mul
     }
 }
 

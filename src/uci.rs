@@ -1,19 +1,14 @@
+use std::{io};
 use std::cell::Cell;
-use std::{io, thread};
-use std::borrow::BorrowMut;
-use std::io::{Error, ErrorKind};
-use crate::{Board, Move, SeqTT};
+use std::marker::PhantomData;
+use std::sync::Arc;
+use crate::{Board, Move};
 use log::{info};
-use std::sync::{Arc, RwLock};
-use std::sync::atomic::{AtomicBool, AtomicUsize};
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
-use std::task::Poll;
-use std::thread::JoinHandle;
-use std::time::Duration;
-use rayon::max_num_threads;
-use crate::moves::{AtomicHistoryTable, HistoryTable, KillerMoves, PrevMoves};
-use crate::search::{AbortFlag, iterative_deepening, lazy_smp, Searcher};//, Searches};
-use crate::tt::{AtomicTTEntry, Entry, ParaTT, TT, TTable, TTableMT, TTableST, TTEntry};
+use crate::lazy_smp::lazy_smp;
+use crate::moves::{NULL_MOVE, PrevMoves};
+use crate::search::{iterative_deepening};
+use crate::tt::{TT, TTable, AtomicTTable};
+use crate::tt_entry::{Entry, NoEntry, TTEntry};
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, Ucinewgame};
 
 enum UciCommand {
@@ -42,46 +37,45 @@ impl UciCommand {
     }
 }
 
-pub type GameStateST = GameState<TTableST>;
-pub type GameStateMT = GameState<TTableMT>;
-
-
 pub struct GameState<T: TT> {
     author: String,
     bot_name: String,
-    tt: Option<T>,
+    tt: T,
     board: Option<Board>,
     prev_moves: Option<PrevMoves>,
     num_threads: usize,
 }
 
-impl GameStateST {
-    pub fn new_single_threaded(author: &str, bot_name: &str) -> GameStateST {
+impl<T: TT> GameState<T>
+where
+    Self: BestMoveFinder
+{
+    pub fn new_single_thread(author: &str, bot_name: &str) -> GameState<TTable> {
         GameState {
             author: author.to_string(),
             bot_name: bot_name.to_string(),
-            tt: Some(TTableST::new_single_threaded()),
+            tt: TTable::new(),
             board: Some(Board::new()),
             prev_moves: Some(PrevMoves::new()),
             num_threads: 1,
         }
     }
-}
 
-impl GameStateMT {
-    pub fn new_multi_threaded(author: &str, bot_name: &str, num_threads: usize) -> GameStateMT {
+    pub fn new_multi_threaded(
+        author: &str,
+        bot_name: &str,
+        num_threads: usize
+    ) -> GameState<Arc<AtomicTTable>> {
         GameState {
             author: author.to_string(),
             bot_name: bot_name.to_string(),
-            tt: Some(TTable::<AtomicTTEntry>::new_multi_threaded()),
+            tt: AtomicTTable::new(),
             board: Some(Board::new()),
             prev_moves: Some(PrevMoves::new()),
             num_threads,
         }
     }
-}
 
-impl<T: TT> GameState<T>{
     pub fn start(&mut self) {
         loop {
             let mut buffer = String::new();
@@ -150,30 +144,8 @@ impl<T: TT> GameState<T>{
         self.board = Some(board);
     }
 
-    pub fn find_best_move(&mut self) -> Move {
-        let (tt, best_move) = if self.num_threads <= 1 {
-            iterative_deepening(
-                self.board.take().unwrap(),
-                self.tt.take().unwrap(),
-                self.prev_moves.take().unwrap()
-            )
-        } else {
-            lazy_smp(
-                self.board.take().unwrap(),
-                self.tt.take().unwrap(),
-                self.prev_moves.take().unwrap(),
-                self.num_threads
-            )
-        };
-
-        // give ownership of the tt back to the Gamestate
-        self.tt = Some(tt);
-
-        best_move.unwrap()
-    }
-
     pub(crate) fn go(&mut self, _args: &str) {
-        let best_move = self.find_best_move();
+        let best_move = self.find_best_move().unwrap_or(NULL_MOVE);
         let out = format!("bestmove {}", best_move.as_uci_string());
 
         info!(target: "output", "{out}");
@@ -181,8 +153,33 @@ impl<T: TT> GameState<T>{
     }
 
     pub(crate) fn ucinewgame(&mut self) {
-        if let Some(tt) = self.tt.as_mut() { tt.clear() }
+        self.tt.clear();
         self.board = Some(Board::new());
         self.prev_moves = Some(PrevMoves::new());
+    }
+}
+
+pub trait BestMoveFinder {
+    fn find_best_move(&mut self) -> Option<Move>;
+}
+
+impl BestMoveFinder for GameState<TTable> {
+    fn find_best_move(&mut self) -> Option<Move> {
+        iterative_deepening(
+            self.board.take().unwrap(),
+            &self.tt,
+            self.prev_moves.take().unwrap()
+        )
+    }
+}
+
+impl BestMoveFinder for GameState<Arc<AtomicTTable>> {
+    fn find_best_move(&mut self) -> Option<Move> {
+        lazy_smp(
+            self.board.take().unwrap(),
+            Arc::clone(&self.tt),
+            self.prev_moves.take().unwrap(),
+            self.num_threads
+        )
     }
 }

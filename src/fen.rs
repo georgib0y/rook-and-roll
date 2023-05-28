@@ -3,7 +3,6 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::board::{Board, gen_hash};
 use crate::eval::{gen_mat_value, gen_pst_value};
-use crate::init;
 use crate::move_info::SQUARES;
 
 
@@ -165,7 +164,7 @@ impl Board {
 
 #[test]
 fn test_fens() -> Result<(), InvalidFenError> {
-    init();
+    crate::init();
 
     let good_fens = [
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

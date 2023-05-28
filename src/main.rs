@@ -1,24 +1,18 @@
 // #![allow(unused)]
 // extern crate core;
 
-use std::env::args;
-use std::fs::{File};
-use std::ops::{Range, RangeInclusive};
-use std::sync::{Arc, RwLock};
-use std::thread;
-use std::time::Instant;
-use rand::{Rng, thread_rng};
-use rand::prelude::ThreadRng;
+extern crate core;
 
-use simplelog::{Config, LevelFilter, WriteLogger};
+use std::env::args;
+use std::sync::Arc;
+use std::time::Instant;
 
 use crate::board::Board;
 use crate::move_tables::MT;
 use crate::moves::{Move};
 use crate::perft::Perft;
-use crate::search::MIN_SCORE;
-use crate::tt::{AtomicTTEntry, EntryType, SeqTT, TT, TTable, TTableMT, TTableST, TTEntry};
-use crate::uci::{GameState, GameStateST};
+use crate::tt::{AtomicTTable, TTable};
+use crate::uci::{BestMoveFinder, GameState};
 use crate::wac_tester::wac_tests;
 // use crate::wac_tester::wac_tests;
 use crate::zorbist::Zorb;
@@ -39,9 +33,12 @@ mod movegen;
 mod wac_tester;
 mod fen;
 mod board_builder;
+mod hh;
+mod tt_entry;
+mod lazy_smp;
 
 // const LOG_DIR: &str = "/home/george/Documents/progs/rookandroll/logs/last-game.log";
-const LOG_DIR: &str = "/home/george/CLionProjects/rustinator-rook_and_roll/logs/last-game.log";
+// const LOG_DIR: &str = "/home/george/CLionProjects/rustinator-rook_and_roll/logs/last-game.log";
 
 
 fn do_perftree() {
@@ -79,26 +76,26 @@ fn main() {
     // return;
 
     // set up logger
-    let file = File::options()
-        .write(true)
-        .truncate(true)
-        .open(LOG_DIR)
-        .unwrap();
+    // let file = File::options()
+    //     .write(true)
+    //     .truncate(true)
+    //     .open(LOG_DIR)
+    //     .unwrap();
 
-    let _ = WriteLogger::init(
-        LevelFilter::Info,
-        Config::default(),
-        file
-    );
+    // let _ = WriteLogger::init(
+    //     LevelFilter::Info,
+    //     Config::default(),
+    //     file
+    // );
 
     let author = "george";
     let bot_name = "rustinator2";
     let num_threads = 1;
 
-    if num_threads == 1 {
-        GameState::<TTableST>::new_single_threaded(author, bot_name).start();
+    if num_threads > 1 {
+        GameState::<Arc<AtomicTTable>>::new_multi_threaded(author, bot_name, num_threads).start();
     } else {
-        GameState::<TTableMT>::new_multi_threaded(author, bot_name, num_threads).start();
+        GameState::<TTable>::new_single_thread(author, bot_name).start();
     }
 }
 
@@ -267,10 +264,10 @@ fn _do_search() {
     // let mut game_state = GameStateMT::new("","", 8);
     // let mut game_state = GameState::new("","");
 
-    let mut game_state = GameStateST::new_single_threaded("", "");
+    let mut game_state = GameState::<TTable>::new_single_thread("", "");
 
     let start = Instant::now();
-    let best_move = game_state.find_best_move();
+    let best_move = game_state.find_best_move().unwrap();
     println!("best move: {}\nTook {}ms\n\n",
         best_move.as_uci_string(),
         start.elapsed().as_millis()
