@@ -1,10 +1,5 @@
-use std::borrow::Borrow;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicBool};
 use std::sync::{Arc};
-use std::thread;
-use std::thread::Scope;
 use crate::eval::{eval, CHECKMATE, STALEMATE, PIECE_VALUES, MATED};
 use crate::{Board, Move};
 use log::info;
@@ -12,8 +7,7 @@ use std::time::Instant;
 use crate::board::{KING, PAWN};
 use crate::movegen::{is_in_check, is_legal_move, moved_into_check, MoveList, MoveSet};
 use crate::moves::{KillerMoves, MoveType, PrevMoves};
-use crate::tt::{AtomicTTable, ORDER, TT};
-use crate::tt_entry::{AtomicTTEntry, Entry};
+use crate::tt::{AtomicTTable, ORDER, TT, TTable};
 use crate::tt_entry::EntryType::{Alpha, Beta, PV};
 
 pub const MAX_DEPTH: usize = 50;
@@ -26,41 +20,37 @@ pub const MAX_TIME: u128 = 5000;
 pub const MIN_SCORE: i32 = CHECKMATE * 2;
 const MAX_SCORE: i32 = -MIN_SCORE;
 
-pub trait AbortFlag {
-    fn has_aborted(&self) -> bool;
-    fn set_abort(&mut self);
+
+pub struct AbortFlag(Arc<AtomicBool>);
+
+impl AbortFlag {
+    pub fn new() -> AbortFlag { AbortFlag(Arc::new(AtomicBool::new(false))) }
+    pub fn has_aborted(&self) -> bool { self.0.load(ORDER) }
+    pub fn set_abort(&mut self, flag: bool) { self.0.store(flag, ORDER) }
 }
 
-impl AbortFlag for bool {
-    fn has_aborted(&self) -> bool { *self }
-    fn set_abort(&mut self) { *self = true }
-}
-
-impl AbortFlag for Arc<AtomicBool> {
-    fn has_aborted(&self) -> bool { self.load(ORDER) }
-    fn set_abort(&mut self) { self.store(true, ORDER) }
+impl Clone for AbortFlag {
+    fn clone(&self) -> Self { AbortFlag(Arc::clone(&self.0)) }
 }
 
 
 
-pub fn iterative_deepening<T: TT>(
+pub fn iterative_deepening(
     board: Board,
-    tt: &T,
+    tt: &TTable,
     prev_moves: PrevMoves,
 ) -> Option<Move> {
-    let mut searcher: Searcher<T, bool> = Searcher::new(board, tt, prev_moves, false);
-    searcher.start = Instant::now();
-    searcher.nodes = 0;
+    let mut searcher  = Searcher::<TTable>::new(board, tt, prev_moves);
 
-    // let mut best_score = MIN_SCORE;
-    let mut best_score: i32 = 0;
+    let mut best_score = MIN_SCORE;
+    // let mut best_score: i32 = 0;
     let mut alpha_window = MIN_SCORE;
     let mut beta_window = -alpha_window;
     let mut best_move = None;
 
     for depth in 1..=MAX_DEPTH {
         if !searcher.can_start_iter() {
-            searcher.abort.set_abort();
+            searcher.abort.set_abort(true);
             break;
         }
 
@@ -89,7 +79,7 @@ pub fn iterative_deepening<T: TT>(
     best_move
 }
 
-pub struct Searcher<'a, T: TT, U: AbortFlag> {
+pub struct Searcher<'a, T: TT> {
     board: Board,
     pub tt: &'a T,
     km: KillerMoves,
@@ -98,11 +88,16 @@ pub struct Searcher<'a, T: TT, U: AbortFlag> {
     pub misses: usize,
     start: Instant,
     pub prev_moves: PrevMoves,
-    abort: U,
+    abort: AbortFlag,
 }
 
-impl<'a, T: TT, U: AbortFlag> Searcher<'a, T, U> {
-    pub fn new(board: Board, tt: &'a T, prev_moves: PrevMoves, abort: U) -> Searcher<'a, T, U> {
+impl <'a> Searcher<'a, Arc<AtomicTTable>> {
+    pub fn new(
+        board: Board, 
+        tt: &'a Arc<AtomicTTable>, 
+        prev_moves: PrevMoves, 
+        abort: AbortFlag
+    ) -> Searcher<'a, Arc<AtomicTTable>> {
         Searcher {
             board,
             tt,
@@ -115,6 +110,25 @@ impl<'a, T: TT, U: AbortFlag> Searcher<'a, T, U> {
             abort,
         }
     }
+}
+
+impl <'a> Searcher<'a, TTable> {
+    pub fn new(board: Board, tt: &'a TTable, prev_moves: PrevMoves) -> Searcher<'a, TTable> {
+        Searcher {
+            board,
+            tt,
+            km: KillerMoves::new(),
+            nodes: 0,
+            hits: 0,
+            misses: 0,
+            start: Instant::now(),
+            prev_moves,
+            abort: AbortFlag::new()
+        }
+    }
+}
+
+impl<'a, T: TT> Searcher<'a, T> {
 
     fn can_start_iter(&self) -> bool {
         self.start.elapsed().as_millis() < MAX_TIME

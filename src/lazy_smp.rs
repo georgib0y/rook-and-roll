@@ -6,7 +6,7 @@ use std::time::Instant;
 use log::info;
 use crate::board::{Board, PAWN};
 use crate::moves::{Move, PrevMoves};
-use crate::search::{MAX_DEPTH, MAX_TIME, MIN_SCORE, Searcher};
+use crate::search::{AbortFlag, MAX_DEPTH, MAX_TIME, MIN_SCORE, Searcher};
 use crate::tt::{AtomicTTable, ORDER};
 
 struct LazySmp {
@@ -15,7 +15,7 @@ struct LazySmp {
     prev_moves: PrevMoves,
     num_threads: usize,
     start: Instant,
-    abort_flag: Arc<AtomicBool>,
+    abort_flag: AbortFlag,
     total_nodes: Arc<AtomicUsize>,
     total_hits: Arc<AtomicUsize>,
     total_misses: Arc<AtomicUsize>,
@@ -35,7 +35,7 @@ impl LazySmp {
         LazySmp {
             board, tt, prev_moves, num_threads,
             start: Instant::now(),
-            abort_flag: Arc::new(AtomicBool::new(false)),
+            abort_flag: AbortFlag::new(),
             total_nodes: Arc::new(AtomicUsize::new(0)),
             total_hits: Arc::new(AtomicUsize::new(0)),
             total_misses: Arc::new(AtomicUsize::new(0)),
@@ -48,7 +48,7 @@ impl LazySmp {
 
     fn start(mut self) -> Option<Move> {
         self.start = Instant::now();
-        self.abort_flag.store(false, ORDER);
+        self.abort_flag.set_abort(false);
 
 
         for depth in 1..=MAX_DEPTH {
@@ -75,34 +75,26 @@ impl LazySmp {
         // spawn n threads at a particular depth
         let mut threads = Vec::with_capacity(self.num_threads);
         for _ in 0..self.num_threads-1 {
-            let nodes = Arc::clone(&self.total_nodes);
-            let hits = Arc::clone(&self.total_hits);
-            let misses = Arc::clone(&self.total_misses);
-            let arc_tt = Arc::clone(&self.tt);
-            let abort = Arc::clone(&self.abort_flag);
-            let prev_moves_clone = self.prev_moves.clone();
-            let board = self.board.clone();
-            let alpha_window = self.alpha_window;
-            let beta_window = self.beta_window;
-            let best_score = self.best_score;
-
+            let helper = self.clone();
+            
             threads.push(scope.spawn(move || {
-                let mut helper = Searcher::new(
-                    board,
-                    &arc_tt,
-                    prev_moves_clone,
-                    abort
+                let mut searcher = Searcher::<Arc<AtomicTTable>>::new(
+                    helper.board,
+                    &helper.tt,
+                    helper.prev_moves,
+                    helper.abort_flag
                 );
 
-                let _ = helper.root_negamax(alpha_window, beta_window, depth);
+                let _ = searcher.root_negamax(helper.alpha_window, helper.beta_window, depth);
                 // research with full window if aspiration search fails
-                if alpha_window != MIN_SCORE && (best_score <= alpha_window || best_score >= beta_window) {
-                    let _ = helper.root_negamax(MIN_SCORE, MIN_SCORE, depth);
+                if helper.alpha_window != MIN_SCORE && 
+                    (helper.best_score <= helper.alpha_window || helper.best_score >= helper.beta_window) {
+                        let _ = searcher.root_negamax(MIN_SCORE, MIN_SCORE, depth);
                 }
 
-                nodes.fetch_add(helper.nodes, ORDER);
-                hits.fetch_add(helper.hits, ORDER);
-                misses.fetch_add(helper.misses, ORDER);
+                helper.total_nodes.fetch_add(searcher.nodes, ORDER);
+                helper.total_hits.fetch_add(searcher.hits, ORDER);
+                helper.total_misses.fetch_add(searcher.misses, ORDER);
             }));
         }
 
@@ -110,11 +102,12 @@ impl LazySmp {
     }
 
     fn search(&mut self, depth: usize) -> (i32, Option<Move>){
-        let mut searcher: Searcher<Arc<AtomicTTable>, Arc<AtomicBool>> = Searcher::new(
+        let tt = Arc::clone(&self.tt);
+        let mut searcher = Searcher::<Arc<AtomicTTable>>::new(
             self.board.clone(),
-            &self.tt,
+            &tt,
             self.prev_moves.clone(),
-            Arc::clone(&self.abort_flag)
+            self.abort_flag.clone()
         );
 
         let (best_score, best_move) = searcher.root_negamax(
@@ -158,6 +151,26 @@ impl LazySmp {
                            self.total_nodes.load(ORDER), hits, misses, hit_rate);
         info!(target: "output", "{}", info);
         println!("{}", info);
+    }
+}
+
+impl Clone for LazySmp {
+    fn clone(&self) -> Self {
+        LazySmp {
+            board: self.board.clone(),
+            tt: Arc::clone(&self.tt),
+            prev_moves: self.prev_moves.clone(),
+            num_threads: self.num_threads,
+            start: self.start,
+            abort_flag: self.abort_flag.clone(),
+            total_nodes: Arc::clone(&self.total_nodes),
+            total_hits: Arc::clone(&self.total_hits),
+            total_misses: Arc::clone(&self.total_misses),
+            best_move: self.best_move.clone(),
+            best_score: self.best_score,
+            alpha_window: self.alpha_window,
+            beta_window: self.beta_window
+        }
     }
 }
 

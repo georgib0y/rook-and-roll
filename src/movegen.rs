@@ -31,13 +31,20 @@ impl MoveSet {
     }
 }
 
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ScoreType {
+    Scored,
+    Unscored
+}
+
 // TODO turn movelist into an iterator that chunk generates moves (ie attacks then quiets)
 // in the iterator, have it filter the illegal moves and request the next chunk (ie call gen_quiet)
 // when needed
 
 pub struct MoveList <'a> {
     pub moves: Vec<Move>,
-    move_scores: Option<Vec<i32>>,
+    move_scores: Vec<i32>,
     move_set: MoveSet,
     board: &'a Board,
 }
@@ -47,31 +54,23 @@ impl <'a> MoveList <'a> {
         board: &'a Board,
         move_capacity: usize,
         move_set: MoveSet,
-        // score_utils: Option<(&'a KillerMoves, &'a PrevMoves, Option<Move>, usize)>,
-        scored: bool,
-        // best_move: Option<Move>,
-        // km: Option<&'a KillerMoves>,
-        // depth: usize,
+        scored: bool
     ) -> MoveList {
         MoveList {
             moves: Vec::with_capacity(move_capacity),
-            move_scores: if scored { Some(Vec::with_capacity(move_capacity)) } else { None },
+            move_scores: Vec::with_capacity(if scored { move_capacity } else { 0 }),
             move_set,
             board,
         }
     }
 
-    // pub fn get_moves<H>(
     pub fn get_moves(
         board: &'a Board,
         move_set: MoveSet,
         km: &KillerMoves,
         best_move: Option<Move>,
         depth: usize,
-        // hh: &H
     ) -> MoveList <'a> {
-        // ) -> MoveList <'a> where H: HTable {
-
         let mut ml = match move_set {
             MoveSet::All =>
                 MoveList::new(board, ALL_CAP, move_set, true)
@@ -87,21 +86,24 @@ impl <'a> MoveList <'a> {
                     .gen_check(),
         };
 
-        // score moves
         ml.moves.iter()
-            .for_each(|m| ml.move_scores.as_mut().unwrap()
+            .for_each(|m| ml.move_scores
                 .push(score_move(board, *m, km, best_move, depth))
             );
 
         ml
     }
 
-    pub fn get_moves_unscored(board: &'a Board, move_set: MoveSet) -> MoveList<'a> {
-        match move_set {
+    pub fn get_moves_unscored(
+        board: &'a Board,
+        move_set: MoveSet,
+    ) -> MoveList <'a> {
+        let mut ml = match move_set {
             MoveSet::All =>
                 MoveList::new(board, ALL_CAP, move_set, false)
                     .gen_attacks(NO_SQUARES, ALL_SQUARES, false)
                     .gen_quiet(NO_SQUARES, ALL_SQUARES, false),
+
             MoveSet::Attacks =>
                 MoveList::new(board, ATTACK_CAP, move_set, false)
                     .gen_attacks(NO_SQUARES, ALL_SQUARES, false),
@@ -109,7 +111,9 @@ impl <'a> MoveList <'a> {
             MoveSet::Check =>
                 MoveList::new(board, CHECK_CAP, move_set, false)
                     .gen_check(),
-        }
+        };
+
+        ml
     }
 
     fn gen_attacks(mut self, pinned: u64, target: u64, check: bool) -> MoveList<'a> {
@@ -567,7 +571,7 @@ impl <'a> MoveList <'a> {
         let mut best_idx = None;
         let mut best_score = i32::MIN;
 
-        for (i, score) in self.move_scores.as_ref().unwrap().iter().enumerate() {
+        for (i, score) in self.move_scores.iter().enumerate() {
             if score > &best_score {
                 best_idx = Some(i);
                 best_score = *score;
@@ -575,24 +579,9 @@ impl <'a> MoveList <'a> {
         }
 
         best_idx.and_then(|best_idx| {
-            self.move_scores.as_mut().unwrap()[best_idx] = i32::MIN;
+            self.move_scores[best_idx] = i32::MIN;
             Some(self.moves[best_idx])
         })
-    }
-
-    fn pop_rand_move(&mut self) -> Option<Move> {
-        let mut rng = thread_rng();
-
-        let start_idx = rng.gen_range(0..self.moves.len());
-        let mut idx = start_idx;
-        // find the next random enough move by stepping left (and wrapping) until a unsearched move is found
-        while self.move_scores.as_ref().unwrap()[idx] == i32::MIN {
-            idx = (idx + 1) % self.moves.len();
-            if idx == start_idx { return None; } // if done a loop return nothing
-        }
-
-        self.move_scores.as_mut().unwrap()[idx] = i32::MIN;
-        Some(self.moves[idx])
     }
 }
 
@@ -628,7 +617,6 @@ pub fn get_piece(board: &Board, sq: u32) -> Option<u32> {
 
 pub fn get_xpiece(board: &Board, sq: u32) -> Option<u32> {
     let bb_sq = SQUARES[sq as usize];
-    // let start = (board.colour_to_move^1) as u32;
     let s = (board.ctm ^1) as u32;
 
     for i in [0, 2, 4, 6, 8, 10] {
@@ -700,38 +688,34 @@ pub fn is_legal_move(board: &Board, m: Move, prev_moves: &PrevMoves) -> bool {
 
 
 fn score_move(
-    // fn score_move<H>(
-        board: &Board,
-        m: Move,
-        km: &KillerMoves,
-        best_move: Option<Move>,
-        depth: usize,
-        // _hh: &H
-    ) -> i32 {
-        if let Some(best_move) = best_move {
-            if best_move == m { return BEST_MOVE_SCORE; }
-        } else if let Some(score) = km.get_move_score(m, depth) {
-            return score
-        }
-
-        match m.move_type() {
-            MoveType::Quiet | MoveType::Double | MoveType::WKingSide | MoveType::BKingSide |
-            MoveType::WQueenSide | MoveType::BQueenSide | MoveType::Promo | MoveType::Ep => {
-                if let Some(score) = km.get_move_score(m, depth) {
-                    score
-                } else {
-                    // hh.get(board.colour_to_move, m.from() as usize, m.to() as usize) as i32
-                    // PST[m.piece() as usize][m.to() as usize] as i32
-                    m.piece() as i32
-                }
-            }
-
-            MoveType::Cap | MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap |
-            MoveType::QPromoCap =>
-                see(board, m, depth) + CAP_SCORE_OFFSET
-
-        }
+    board: &Board,
+    m: Move,
+    km: &KillerMoves,
+    best_move: Option<Move>,
+    depth: usize,
+) -> i32 {
+    if let Some(best_move) = best_move {
+        if best_move == m { return BEST_MOVE_SCORE; }
+    } else if let Some(score) = km.get_move_score(m, depth) {
+        return score
     }
+
+    match m.move_type() {
+        MoveType::Quiet | MoveType::Double | MoveType::WKingSide | MoveType::BKingSide |
+        MoveType::WQueenSide | MoveType::BQueenSide | MoveType::Promo | MoveType::Ep => {
+            if let Some(score) = km.get_move_score(m, depth) {
+                score
+            } else {
+                m.piece() as i32
+            }
+        }
+
+        MoveType::Cap | MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap |
+        MoveType::QPromoCap =>
+            see(board, m, depth) + CAP_SCORE_OFFSET
+
+    }
+}
 
 fn see_get_least_valuable(board: &Board, attackers: u64, board_depth: usize) -> (usize, u64) {
     let colour = board.ctm ^ (board_depth & 1);

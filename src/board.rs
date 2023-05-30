@@ -89,29 +89,11 @@ impl Board {
 
 
     pub fn copy_make(&self, m: Move) -> Board {
-        // println!("{}", self);
-        // get info from board
         let (from, to, piece, xpiece, move_type) = m.all();
-        let ft = SQUARES[from] | SQUARES[to];
 
-        let mut board_builder = BoardBuilder::new(self, ft, from, to, piece);
-
-        match move_type {
-            // (piece > 1) as usize == 1 if piece not pawn, so halfmove*1, if pawn halfmove*0 == 0
-            MoveType::Quiet => board_builder.apply_quiet(piece),
-            MoveType::Double => board_builder.apply_double(to),
-            MoveType::Cap => board_builder.apply_cap(xpiece, to),
-            MoveType::WKingSide => board_builder.apply_castle(0, 7, 5),
-            MoveType::BKingSide => board_builder.apply_castle(1, 63, 61),
-            MoveType::WQueenSide => board_builder.apply_castle(0, 0, 3),
-            MoveType::BQueenSide => board_builder.apply_castle(1, 56, 59),
-            MoveType::Promo => board_builder.apply_promo(piece, xpiece, to),
-            MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap | MoveType::QPromoCap =>
-                board_builder.apply_promo_cap(move_type, piece, xpiece, to),
-            MoveType::Ep => board_builder.apply_ep(to)
-        }
-
-        board_builder.build()
+        BoardBuilder::new(self, from, to, piece)
+            .apply_move(to, piece, xpiece, move_type)
+            .build()
     }
 }
 

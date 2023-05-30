@@ -215,44 +215,20 @@ pub const RAYS: [[u64; 65]; 8] = [
 pub struct PST;
 
 impl PST {
-    pub fn mid_pst(mut piece: usize, mut sq: usize) -> i32 {
+    pub const fn mid_pst(mut piece: usize, mut sq: usize) -> i32 {
         let mul = 1 - ( (piece & 1) * 2 ) as i32; // either 1 or -1 depending on piece colour
         sq ^= (piece & 1)*56;
         piece /= 2; // take the colour out of the piece (only indexes white)
         MID_PST[piece][sq] as i32 * mul 
     }
 
-    pub fn end_pst(mut piece: usize, mut sq: usize) -> i32 {
+    pub const fn end_pst(mut piece: usize, mut sq: usize) -> i32 {
         let mul = 1 - ( (piece & 1) * 2 ) as i32; // either 1 or -1 depending on piece colour
         sq ^= (piece & 1)*56;
         piece /= 2; // take the colour out of the piece (only indexes white)
         END_PST[piece][sq] as i32 * mul
     }
 }
-
-
-// #[test]
-// fn xor_vs_arrays() {
-//     crate::init();
-//
-//     for piece in 0..12 {
-//         for sq in 0..64 {
-//             dbg!(piece, sq);
-//             assert_eq!(PST::mid_pst(piece, sq), PST::mid_pst_xor(piece, sq));
-//         }
-//     }
-// }
-
-#[test]
-fn correct_index() {
-    for i in 0..64 {
-        let bizzaro = (7-i/8)*8 + (i%8);
-        println!("i {i} bizz {bizzaro} xor {}", i^56);
-        assert_eq!(bizzaro, i^56);
-    }
-}
-
-
 
 const MID_PST: [&[i16]; 6] = [
     &WPAWN_MID_PST,

@@ -17,8 +17,9 @@ pub struct BoardBuilder {
 }
 
 impl BoardBuilder {
-    pub fn new(board: &Board, ft: u64, from: usize, to: usize, piece: usize) -> BoardBuilder {
-        let mut hash = board.hash ^ (board.ep < 64) as u64 * Zorb::ep_file(board.ep);
+    pub fn new(board: &Board, from: usize, to: usize, piece: usize) -> BoardBuilder {
+        let ft = SQUARES[from] | SQUARES[to];
+        let mut hash = copy_hash(board, piece, from, to) ^ (board.ep < 64) as u64 * Zorb::ep_file(board.ep);
         let (mg_value, eg_value) = copy_values(board, piece, from, to);
         let castle_state = copy_castle_state(board.castle_state, piece, from, to, &mut hash);
 
@@ -33,6 +34,24 @@ impl BoardBuilder {
             mg_value,
             eg_value
         }
+    }
+
+    pub fn apply_move(mut self, to: usize, piece: usize, xpiece: usize, move_type: MoveType) -> Self {
+        match move_type {
+            MoveType::Quiet => self.apply_quiet(piece),
+            MoveType::Double => self.apply_double(to),
+            MoveType::Cap => self.apply_cap(xpiece, to),
+            MoveType::WKingSide => self.apply_castle(0, 7, 5),
+            MoveType::BKingSide => self.apply_castle(1, 63, 61),
+            MoveType::WQueenSide => self.apply_castle(0, 0, 3),
+            MoveType::BQueenSide => self.apply_castle(1, 56, 59),
+            MoveType::Promo => self.apply_promo(piece, xpiece, to),
+            MoveType::NPromoCap | MoveType::RPromoCap | MoveType::BPromoCap | MoveType::QPromoCap =>
+                self.apply_promo_cap(move_type, piece, xpiece, to),
+            MoveType::Ep => self.apply_ep(to)
+        }
+
+        self
     }
 
     pub fn build(&self) -> Board {
@@ -63,7 +82,7 @@ impl BoardBuilder {
         self.pieces[xpiece] ^= SQUARES[to];
         self.util[self.ctm ^ 1] ^= SQUARES[to];
         self.util[2] ^= SQUARES[to];
-        //
+
         self.mg_value -= MAT_SCORES[xpiece] + PST::mid_pst(xpiece, to);
         self.eg_value -= MAT_SCORES[xpiece] + PST::end_pst(xpiece, to);
 
@@ -76,7 +95,7 @@ impl BoardBuilder {
         self.pieces[ROOK + colour] ^= sqs;
         self.util[colour] ^= sqs;
         self.util[2] ^= sqs;
-        //
+
         self.mg_value += -PST::mid_pst(ROOK + colour, from) + PST::mid_pst(ROOK + colour, to);
         self.eg_value += -PST::end_pst(ROOK + colour, from) + PST::end_pst(ROOK + colour, to);
 
@@ -191,6 +210,33 @@ pub fn copy_castle_state(mut castle_state: u8, piece: usize, from: usize, to: us
         castle_state &= 0b1110;
         *hash ^= Zorb::castle_rights(BQS_STATE);
     }
+
+    castle_state
+}
+
+fn _copy_castle_state(
+    mut castle_state: u8,
+    piece: usize,
+    from: usize,
+    to: usize,
+    hash: &mut u64
+) -> u8 {
+
+    let wks = ((piece == 10 || from == 7 || to == 7) && castle_state & 0b1000 == 0) as u8;
+    castle_state &= wks << 3 | 0b0111;
+    *hash ^= wks as u64 * Zorb::castle_rights(WKS_STATE);
+
+    let wqs = ((piece == 10 || from == 0 || to == 0) && castle_state & 0b100 == 0) as u8;
+    castle_state &= wqs << 2 | 0b1011;
+    *hash ^= wqs as u64 * Zorb::castle_rights(WQS_STATE);
+
+    let bks = ((piece == 11 || from == 63 || to == 63) && castle_state & 0b10 == 0) as u8;
+    castle_state &=  bks << 1 | 0b1101;
+    *hash ^= bks as u64 * Zorb::castle_rights(BKS_STATE);
+
+    let bqs = ((piece == 11 || from == 56 || to == 56) && castle_state & 0b1 == 0) as u8;
+    castle_state &= bqs | 0b1110;
+    *hash ^= bqs as u64 * Zorb::castle_rights(BQS_STATE);
 
     castle_state
 }

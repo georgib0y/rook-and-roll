@@ -124,7 +124,13 @@ impl Move {
 
     #[inline]
     pub fn all(&self) -> (usize, usize, usize, usize, MoveType) {
-        (self.from() as usize, self.to() as usize, self.piece() as usize, self.xpiece() as usize, self.move_type())
+        (
+            self.from() as usize,
+            self.to() as usize,
+            self.piece() as usize,
+            self.xpiece() as usize,
+            self.move_type()
+        )
     }
 
     pub fn new_from_text(text: &str, b: &Board) -> Move {
