@@ -1,14 +1,14 @@
 #![allow(unused)]
 
-use std::sync::atomic::AtomicU32;
 use crate::tt::ORDER;
+use std::sync::atomic::AtomicU32;
 
 pub trait HTable {
     fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32;
 }
 
 pub struct HistoryTable {
-    history: Vec<[[u32; 64]; 64]>
+    history: Vec<[[u32; 64]; 64]>,
 }
 
 impl HistoryTable {
@@ -31,7 +31,7 @@ impl HTable for HistoryTable {
 }
 
 pub struct AtomicHistoryTable {
-    history: Vec<AtomicU32>
+    history: Vec<AtomicU32>,
 }
 
 impl AtomicHistoryTable {
@@ -42,13 +42,12 @@ impl AtomicHistoryTable {
     }
 
     pub fn insert(&self, colour_to_move: usize, from: usize, to: usize, depth: usize) {
-        self.history[colour_to_move*64*64 + from*64 + to]
-            .store((depth*depth) as u32, ORDER)
+        self.history[colour_to_move * 64 * 64 + from * 64 + to].store((depth * depth) as u32, ORDER)
     }
 }
 
 impl HTable for AtomicHistoryTable {
     fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32 {
-        self.history[colour_to_move*64*64 + from*64 + to].load(ORDER)
+        self.history[colour_to_move * 64 * 64 + from * 64 + to].load(ORDER)
     }
 }

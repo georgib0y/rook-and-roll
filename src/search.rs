@@ -1,14 +1,14 @@
-use std::sync::atomic::{AtomicBool};
-use std::sync::{Arc};
-use crate::eval::{eval, CHECKMATE, STALEMATE, PIECE_VALUES, MATED};
-use crate::{Board, Move};
-use log::info;
-use std::time::Instant;
 use crate::board::{KING, PAWN};
+use crate::eval::{eval, CHECKMATE, MATED, PIECE_VALUES, STALEMATE};
 use crate::movegen::{is_in_check, is_legal_move, moved_into_check, MoveList, MoveSet};
 use crate::moves::{KillerMoves, MoveType, PrevMoves};
-use crate::tt::{AtomicTTable, ORDER, TT, TTable};
+use crate::tt::{AtomicTTable, TTable, ORDER, TT};
 use crate::tt_entry::EntryType::{Alpha, Beta, PV};
+use crate::{Board, Move};
+use log::info;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Instant;
 
 pub const MAX_DEPTH: usize = 50;
 // pub const MAX_DEPTH: usize = 4;
@@ -20,37 +20,38 @@ pub const MAX_TIME: u128 = 5000;
 pub const MIN_SCORE: i32 = CHECKMATE * 2;
 const MAX_SCORE: i32 = -MIN_SCORE;
 
-
 pub struct AbortFlag(Arc<AtomicBool>);
 
 impl AbortFlag {
-    pub fn new() -> AbortFlag { AbortFlag(Arc::new(AtomicBool::new(false))) }
-    pub fn has_aborted(&self) -> bool { self.0.load(ORDER) }
-    pub fn set_abort(&mut self, flag: bool) { self.0.store(flag, ORDER) }
+    pub fn new() -> AbortFlag {
+        AbortFlag(Arc::new(AtomicBool::new(false)))
+    }
+    pub fn has_aborted(&self) -> bool {
+        self.0.load(ORDER)
+    }
+    pub fn set_abort(&self, flag: bool) {
+        self.0.store(flag, ORDER)
+    }
 }
 
 impl Clone for AbortFlag {
-    fn clone(&self) -> Self { AbortFlag(Arc::clone(&self.0)) }
+    fn clone(&self) -> Self {
+        AbortFlag(Arc::clone(&self.0))
+    }
 }
 
+pub fn iterative_deepening(board: Board, tt: &TTable, prev_moves: PrevMoves) -> Option<Move> {
+    let mut searcher = Searcher::<TTable>::new(board, tt, prev_moves);
 
-
-pub fn iterative_deepening(
-    board: Board,
-    tt: &TTable,
-    prev_moves: PrevMoves,
-) -> Option<Move> {
-    let mut searcher  = Searcher::<TTable>::new(board, tt, prev_moves);
-
-    let mut best_score = MIN_SCORE;
-    // let mut best_score: i32 = 0;
+    #[allow(unused)]
+    let mut best_score: i32 = MIN_SCORE;
     let mut alpha_window = MIN_SCORE;
     let mut beta_window = -alpha_window;
     let mut best_move = None;
 
     for depth in 1..=MAX_DEPTH {
         if !searcher.can_start_iter() {
-            searcher.abort.set_abort(true);
+            searcher.abort();
             break;
         }
 
@@ -61,22 +62,39 @@ pub fn iterative_deepening(
         }
 
         // re-adjust aspiration window for the next iteration
-        alpha_window = best_score - (PAWN/2) as i32;
-        beta_window = best_score + (PAWN/2) as i32;
+        alpha_window = best_score - (PAWN / 2) as i32;
+        beta_window = best_score + (PAWN / 2) as i32;
 
-        let nps = searcher.nodes / (searcher.start.elapsed().as_secs()+1) as usize;
-
-        // let info = format!("info depth {depth} score cp {best_score} nps {} tbhits {:.0} pv {}", nps, searcher.tt_hit_rate(), best_move.unwrap().as_uci_string() );
-        let info = format!("info depth {depth} score cp {best_score} nps {} pv {}", nps, best_move.unwrap().as_uci_string() );
-
-        info!(target: "output", "{}", info);
-        println!("{}", info);
+        print_iter_info(&searcher, depth, best_score, best_move);
     }
 
-    let hit_rate = (searcher.hits as f32 / (searcher.hits+searcher.misses+1) as f32) * 100.0;
-    println!("info string nodes {} hitrate {:.2}%", searcher.nodes, hit_rate);
-    // return the seacher to take back ownership of the tt
+    print_hitrate_into(&searcher);
     best_move
+}
+
+fn print_iter_info<T: TT>(
+    searcher: &Searcher<T>,
+    depth: usize,
+    best_score: i32,
+    best_move: Option<Move>,
+) {
+    let nps = searcher.nodes / (searcher.start.elapsed().as_secs() + 1) as usize;
+    let info = format!(
+        "info depth {depth} score cp {best_score} nps {} pv {}",
+        nps,
+        best_move.unwrap().as_uci_string()
+    );
+
+    info!(target: "output", "{}", info);
+    println!("{}", info);
+}
+
+fn print_hitrate_into<T: TT>(searcher: &Searcher<T>) {
+    let hit_rate = (searcher.hits as f32 / (searcher.hits + searcher.misses + 1) as f32) * 100.0;
+    println!(
+        "info string nodes {} hitrate {:.2}%",
+        searcher.nodes, hit_rate
+    );
 }
 
 pub struct Searcher<'a, T: TT> {
@@ -91,12 +109,12 @@ pub struct Searcher<'a, T: TT> {
     abort: AbortFlag,
 }
 
-impl <'a> Searcher<'a, Arc<AtomicTTable>> {
+impl<'a> Searcher<'a, Arc<AtomicTTable>> {
     pub fn new(
-        board: Board, 
-        tt: &'a Arc<AtomicTTable>, 
-        prev_moves: PrevMoves, 
-        abort: AbortFlag
+        board: Board,
+        tt: &'a Arc<AtomicTTable>,
+        prev_moves: PrevMoves,
+        abort: AbortFlag,
     ) -> Searcher<'a, Arc<AtomicTTable>> {
         Searcher {
             board,
@@ -112,7 +130,7 @@ impl <'a> Searcher<'a, Arc<AtomicTTable>> {
     }
 }
 
-impl <'a> Searcher<'a, TTable> {
+impl<'a> Searcher<'a, TTable> {
     pub fn new(board: Board, tt: &'a TTable, prev_moves: PrevMoves) -> Searcher<'a, TTable> {
         Searcher {
             board,
@@ -123,43 +141,60 @@ impl <'a> Searcher<'a, TTable> {
             misses: 0,
             start: Instant::now(),
             prev_moves,
-            abort: AbortFlag::new()
+            abort: AbortFlag::new(),
         }
     }
 }
 
 impl<'a, T: TT> Searcher<'a, T> {
+    fn abort(&self) {
+        self.abort.set_abort(true);
+    }
+
+    fn has_aborted(&self) -> bool {
+        self.abort.has_aborted()
+    }
 
     fn can_start_iter(&self) -> bool {
-        self.start.elapsed().as_millis() < MAX_TIME
+        !self.has_aborted() && self.start.elapsed().as_millis() < MAX_TIME
     }
 
     pub fn root_negamax(
         &mut self,
         alpha_window: i32,
         beta_window: i32,
-        depth: usize
+        depth: usize,
     ) -> (i32, Option<Move>) {
         let p_mul = if self.board.ctm == 0 { 1 } else { -1 };
 
         let move_set = MoveSet::get_move_set(MoveSet::All, &self.board);
         let root_moves: Vec<Move> = MoveList::get_moves(
-            &self.board, move_set, &self.km, self.tt.get_best(self.board.hash), depth,
-        ).collect();
+            &self.board,
+            move_set,
+            &self.km,
+            self.tt.get_best(self.board.hash),
+            depth,
+        )
+        .collect();
 
         let mut best_move = None;
         let mut best_score = MIN_SCORE;
 
         for m in root_moves {
             // limit the amount of times has aborted is checked
-            if self.abort.has_aborted() { break; }
+            if self.has_aborted() {
+                break;
+            }
 
             let board = self.board.copy_make(m);
             if (move_set != MoveSet::Check && moved_into_check(&board, m))
-                || !is_legal_move(&board, m, &self.prev_moves) { continue; }
+                || !is_legal_move(&board, m, &self.prev_moves)
+            {
+                continue;
+            }
 
             self.prev_moves.add(board.hash);
-            let score = -self.negamax(&board, depth-1, 0, alpha_window, beta_window, -p_mul);
+            let score = -self.negamax(&board, depth - 1, 0, alpha_window, beta_window, -p_mul);
             self.prev_moves.remove(board.hash);
 
             if score > best_score {
@@ -180,7 +215,9 @@ impl<'a, T: TT> Searcher<'a, T> {
         beta: i32,
         p_mul: i32, // player multiplier - to be passed down to eval
     ) -> i32 {
-        // if self.has_aborted() { return MIN_SCORE; }
+        if self.has_aborted() {
+            return MIN_SCORE;
+        }
         self.nodes += 1;
 
         if let Some(score) = self.tt.get_score(board.hash, depth, alpha, beta, ply) {
@@ -207,14 +244,16 @@ impl<'a, T: TT> Searcher<'a, T> {
             &self.km,
             self.tt.get_best(board.hash),
             depth,
-            // self.history_table()
         );
 
         for m in ml {
             let b = board.copy_make(m);
 
             if (move_set != MoveSet::Check && moved_into_check(&b, m))
-                || !is_legal_move(&b, m, &self.prev_moves) { continue }
+                || !is_legal_move(&b, m, &self.prev_moves)
+            {
+                continue;
+            }
 
             not_moved = false;
             self.prev_moves.add(b.hash);
@@ -248,19 +287,13 @@ impl<'a, T: TT> Searcher<'a, T> {
             alpha
         };
 
-        self.tt.insert(board.hash, alpha, table_entry_type, depth, best_move, ply);
+        self.tt
+            .insert(board.hash, alpha, table_entry_type, depth, best_move, ply);
 
         alpha
     }
 
-    fn quiesce(
-        &mut self,
-        board: &Board,
-        ply: usize,
-        mut alpha: i32,
-        beta: i32,
-        p_mul: i32,
-    ) -> i32 {
+    fn quiesce(&mut self, board: &Board, ply: usize, mut alpha: i32, beta: i32, p_mul: i32) -> i32 {
         self.nodes += 1;
 
         // if ply > 5 { return eval(board, p_mul); }
@@ -270,35 +303,50 @@ impl<'a, T: TT> Searcher<'a, T> {
         }
 
         let eval = eval(board, p_mul);
-        if eval >= beta { return beta; }
-        if alpha < eval { alpha = eval; }
+        if eval >= beta {
+            return beta;
+        }
+        if alpha < eval {
+            alpha = eval;
+        }
 
         let ml = MoveList::get_moves(
             board,
             MoveSet::Attacks,
             &self.km,
             self.tt.get_best(board.hash),
-            MAX_DEPTH+1,
+            MAX_DEPTH + 1,
             // self.history_table()
         );
         // let ml = MoveList::get_moves_unscored(board, MoveSet::Attacks);
 
         for m in ml {
-            if m.xpiece() >= KING as u32 { return MATED - ply as i32; }
+            if m.xpiece() >= KING as u32 {
+                return MATED - ply as i32;
+            }
 
             let b = board.copy_make(m);
 
-            if moved_into_check(&b, m) { continue; }
+            if moved_into_check(&b, m) {
+                continue;
+            }
 
             // delta pruning
             if eval + PIECE_VALUES[m.xpiece() as usize] + 200 < alpha
                 && !m.move_type().is_promo()
-                && (b.util[2] ^ b.pieces[0] ^ b.pieces[1]).count_ones() > 4  { continue; }
+                && (b.util[2] ^ b.pieces[0] ^ b.pieces[1]).count_ones() > 4
+            {
+                continue;
+            }
 
             let score = -self.quiesce(&b, ply + 1, -beta, -alpha, -p_mul);
 
-            if score >= beta { return beta; }
-            if score > alpha { alpha = score; }
+            if score >= beta {
+                return beta;
+            }
+            if score > alpha {
+                alpha = score;
+            }
         }
 
         alpha

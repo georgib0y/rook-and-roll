@@ -15,7 +15,7 @@ impl Zorb {
 
     #[inline]
     pub fn piece(piece: usize, sq: usize) -> u64 {
-        unsafe { ZORB_ARR[piece*64+sq] }
+        unsafe { ZORB_ARR[piece * 64 + sq] }
     }
 
     #[inline]
@@ -25,20 +25,17 @@ impl Zorb {
 
     #[inline]
     pub fn castle_rights(idx: usize) -> u64 {
-        unsafe { ZORB_ARR[769+idx] }
+        unsafe { ZORB_ARR[769 + idx] }
     }
 
     #[inline]
     pub fn ep_file(sq: usize) -> u64 {
-        unsafe { ZORB_ARR[773 + (sq%8)] }
+        unsafe { ZORB_ARR[773 + (sq % 8)] }
     }
 
     pub fn print_zorb() {
         println!("pub const ZORB: [u64; 781] = [");
-        unsafe {
-            ZORB_ARR.iter().for_each(|z| println!("\t{z:#0x},"))
-        }
+        unsafe { ZORB_ARR.iter().for_each(|z| println!("\t{z:#0x},")) }
         println!("];");
     }
-
 }

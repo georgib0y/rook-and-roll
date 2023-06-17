@@ -1,9 +1,9 @@
-use std::fs::{read_to_string};
 use crate::board::PIECE_NAMES;
 use crate::move_info::SQ_NAMES;
 use crate::moves::Move;
 use crate::tt::TTable;
 use crate::uci::{BestMoveFinder, GameState};
+use std::fs::read_to_string;
 
 pub fn wac_tests() {
     let wacs = read_to_string("./wac").unwrap();
@@ -14,7 +14,9 @@ pub fn wac_tests() {
     let mut game_state = GameState::<TTable>::new_single_thread("", "");
 
     for line in wacs.lines().take(num_tests) {
-        if line.trim().is_empty() { break; }
+        if line.trim().is_empty() {
+            break;
+        }
         let (position, wac_id) = line.split_once("; ").unwrap();
         // id == WAC.001
         let id = String::from(wac_id.split("\"").skip(1).next().unwrap());

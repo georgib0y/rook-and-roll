@@ -1,10 +1,10 @@
+use crate::board_builder::BoardBuilder;
 use crate::eval::{gen_mat_value, gen_pst_value};
-use crate::move_info::{SQUARES};
+use crate::move_info::SQUARES;
+use crate::movegen::{get_piece, get_xpiece};
 use crate::moves::{Move, MoveType};
 use crate::zorbist::Zorb;
 use std::fmt;
-use crate::board_builder::BoardBuilder;
-use crate::movegen::{get_piece, get_xpiece};
 
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 2;
@@ -31,24 +31,36 @@ const DEFAULT_PIECES: [u64; 12] = [
 ];
 
 const DEFAULT_UTIL: [u64; 3] = [
-    DEFAULT_PIECES[0] | DEFAULT_PIECES[2] | DEFAULT_PIECES[4] |
-        DEFAULT_PIECES[6] | DEFAULT_PIECES[8] | DEFAULT_PIECES[10], // white
-
-    DEFAULT_PIECES[1] | DEFAULT_PIECES[3] | DEFAULT_PIECES[5] |
-        DEFAULT_PIECES[7] | DEFAULT_PIECES[9] | DEFAULT_PIECES[11], // black
-
-    DEFAULT_PIECES[0] | DEFAULT_PIECES[2] | DEFAULT_PIECES[4] |
-        DEFAULT_PIECES[6] | DEFAULT_PIECES[8] | DEFAULT_PIECES[10] |
-        DEFAULT_PIECES[1] | DEFAULT_PIECES[3] | DEFAULT_PIECES[5] |
-        DEFAULT_PIECES[7] | DEFAULT_PIECES[9] | DEFAULT_PIECES[11], // all
+    DEFAULT_PIECES[0]
+        | DEFAULT_PIECES[2]
+        | DEFAULT_PIECES[4]
+        | DEFAULT_PIECES[6]
+        | DEFAULT_PIECES[8]
+        | DEFAULT_PIECES[10], // white
+    DEFAULT_PIECES[1]
+        | DEFAULT_PIECES[3]
+        | DEFAULT_PIECES[5]
+        | DEFAULT_PIECES[7]
+        | DEFAULT_PIECES[9]
+        | DEFAULT_PIECES[11], // black
+    DEFAULT_PIECES[0]
+        | DEFAULT_PIECES[2]
+        | DEFAULT_PIECES[4]
+        | DEFAULT_PIECES[6]
+        | DEFAULT_PIECES[8]
+        | DEFAULT_PIECES[10]
+        | DEFAULT_PIECES[1]
+        | DEFAULT_PIECES[3]
+        | DEFAULT_PIECES[5]
+        | DEFAULT_PIECES[7]
+        | DEFAULT_PIECES[9]
+        | DEFAULT_PIECES[11], // all
 ];
 
 pub const WKS_STATE: usize = 0;
 pub const WQS_STATE: usize = 1;
 pub const BKS_STATE: usize = 2;
 pub const BQS_STATE: usize = 3;
-
-
 
 // 0 - white to move, 1 - black to move
 #[derive(Copy, Clone)]
@@ -87,7 +99,6 @@ impl Board {
         board
     }
 
-
     pub fn copy_make(&self, m: Move) -> Board {
         let (from, to, piece, xpiece, move_type) = m.all();
 
@@ -100,9 +111,10 @@ impl Board {
 #[test]
 fn inc_value_update() {
     crate::init();
-    let board = Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
+    let board =
+        Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
 
-    let quiet_move = Move::new(0,1,ROOK as u32,0,MoveType::Quiet);
+    let quiet_move = Move::new(0, 1, ROOK as u32, 0, MoveType::Quiet);
     let quiet_board = board.copy_make(quiet_move);
 
     let mat = gen_mat_value(&quiet_board);
@@ -113,7 +125,7 @@ fn inc_value_update() {
     assert_eq!(quiet_board.mg_value, mg_quiet);
     assert_eq!(quiet_board.eg_value, eg_quiet);
 
-    let cap_move = Move::new(25,32,BISHOP as u32, KNIGHT as u32 +1, MoveType::Cap);
+    let cap_move = Move::new(25, 32, BISHOP as u32, KNIGHT as u32 + 1, MoveType::Cap);
     let cap_board = board.copy_make(cap_move);
 
     let mat = gen_mat_value(&cap_board);
@@ -125,22 +137,28 @@ fn inc_value_update() {
     assert_eq!(cap_board.eg_value, eg_cap);
 }
 
-
-
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const SQ_PIECES: [&str;12] = ["P ", "p ", "N ", "n ", "R ", "r ", "B ", "b ", "Q ", "q ", "K ", "k "];
+        const SQ_PIECES: [&str; 12] = [
+            "P ", "p ", "N ", "n ", "R ", "r ", "B ", "b ", "Q ", "q ", "K ", "k ",
+        ];
 
-        let add_sq = |s, sq| format!("{s}{}", get_piece(self, sq)
-            .or(get_xpiece(self, sq))
-            .map_or("- ", |piece| SQ_PIECES[piece as usize])
-        );
+        let add_sq = |s, sq| {
+            format!(
+                "{s}{}",
+                get_piece(self, sq)
+                    .or(get_xpiece(self, sq))
+                    .map_or("- ", |piece| SQ_PIECES[piece as usize])
+            )
+        };
 
         // iterate over every row (56-63, 48-55, ... 0-7) and concat the pieces of that row to the out string
-        let mut out = (0..8).rev().map(|i| (i+1, (i*8..i*8+8)))
-            .fold(String::new(), |out, (row_num, row)|
+        let mut out = (0..8)
+            .rev()
+            .map(|i| (i + 1, (i * 8..i * 8 + 8)))
+            .fold(String::new(), |out, (row_num, row)| {
                 format!("{out}\n{row_num}   {}", row.fold(String::new(), add_sq))
-            );
+            });
 
         out.push_str("\n\n    A B C D E F G H\n");
         write!(f, "{}", out)
@@ -159,12 +177,24 @@ pub fn gen_hash(board: Board) -> u64 {
     }
 
     // if black to move toggle zorb
-    if board.ctm == 1 { hash ^= Zorb::colour(); }
-    if (board.castle_state & 0b1000) == 8 { hash ^= Zorb::castle_rights(WKS_STATE); }
-    if (board.castle_state & 0b100) == 4 { hash ^= Zorb::castle_rights(WQS_STATE); }
-    if (board.castle_state & 0b10) == 2 { hash ^= Zorb::castle_rights(BKS_STATE); }
-    if (board.castle_state & 0b1) == 1 { hash ^= Zorb::castle_rights(BQS_STATE); }
-    if board.ep < 64 { hash ^= Zorb::ep_file(board.ep); }
+    if board.ctm == 1 {
+        hash ^= Zorb::colour();
+    }
+    if (board.castle_state & 0b1000) == 8 {
+        hash ^= Zorb::castle_rights(WKS_STATE);
+    }
+    if (board.castle_state & 0b100) == 4 {
+        hash ^= Zorb::castle_rights(WQS_STATE);
+    }
+    if (board.castle_state & 0b10) == 2 {
+        hash ^= Zorb::castle_rights(BKS_STATE);
+    }
+    if (board.castle_state & 0b1) == 1 {
+        hash ^= Zorb::castle_rights(BQS_STATE);
+    }
+    if board.ep < 64 {
+        hash ^= Zorb::ep_file(board.ep);
+    }
 
     hash
 }
@@ -199,5 +229,3 @@ pub fn _print_bb(bb: u64) {
 
     println!("{}", out);
 }
-
-

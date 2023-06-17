@@ -9,7 +9,7 @@ use std::time::Instant;
 
 use crate::board::Board;
 use crate::move_tables::MT;
-use crate::moves::{Move};
+use crate::moves::Move;
 use crate::perft::Perft;
 use crate::tt::{AtomicTTable, TTable};
 use crate::uci::{BestMoveFinder, GameState};
@@ -21,6 +21,7 @@ mod board;
 mod eval;
 mod move_info;
 mod move_tables;
+mod movegen;
 mod moves;
 mod opening_book;
 mod perft;
@@ -28,18 +29,16 @@ mod search;
 mod tt;
 mod uci;
 mod zorbist;
-mod movegen;
 
-mod wac_tester;
-mod fen;
 mod board_builder;
+mod fen;
 mod hh;
-mod tt_entry;
 mod lazy_smp;
+mod tt_entry;
+mod wac_tester;
 
 // const LOG_DIR: &str = "/home/george/Documents/progs/rookandroll/logs/last-game.log";
 // const LOG_DIR: &str = "/home/george/CLionProjects/rustinator-rook_and_roll/logs/last-game.log";
-
 
 fn do_perftree() {
     let args: Vec<String> = args().collect();
@@ -255,7 +254,6 @@ fn _do_search() {
     //     start.elapsed().as_millis()
     // );
 
-
     //
     // for m_str in "f8g7 d1e2 d8c7 c1f4 b7b5 h2h3 b5b4 c3a4 c7a5 b2b3 g4h6 e2e4 a5b5 e4c4 c8e6 c4b5 c6b5 a4c5 a8c8 c5a6 c8c2 f3d4 c2c3 d4b5 c3d3 a6c5 d3d5 b5c7 e8f8 c5e6 f7e6 c7d5 e6d5 a1c1 f8f7 c1c7 h8a8 e1g1 h6f5 f1d1 g6g5 f4g5 g7e5 c7b7 a8g8 d1d5 e5f6 d5f5 g8g5 f5g5 f6g5 b7b4 a7a5 b4c4 g5d2 a2a3 h7h6 g1f1 e7e5 c4c2 d2g5 c2c5 f7e6 c5a5 g5d2 a5a7 e6d6 f1g1 d6c5 a7a6 d2g5 b3b4 c5c4 g1h1 g5d2 a6d6 d2e1 d6e6 c4d5 e6f6 d5c4 f2f4 e5e4 f6e6 c4d4 f4f5 d4d5 b4b5 e1g3 b5b6 h6h5 b6b7 g3b8 e6e8 b8d6 e8d8 d5c6 d8d6 c6d6 b7b8q d6e7 b8e5 e7f7 e5e4 f7f6 g2g3 f6f7 g3g4 h5g4 h3g4 f7f6 a3a4 f6g5 a4a5 g5f6 g4g5 f6g5 f5f6 g5f6 a5a6 f6f7 e4b1 f7e6".split(" ") {
     //     let m = Move::new_from_text(m_str, state_mt.board());
@@ -270,12 +268,12 @@ fn _do_search() {
 
     let start = Instant::now();
     let best_move = game_state.find_best_move().unwrap();
-    println!("best move: {}\nTook {}ms\n\n",
+    println!(
+        "best move: {}\nTook {}ms\n\n",
         best_move.as_uci_string(),
         start.elapsed().as_millis()
     );
 }
-
 
 fn _do_perf() {
     let b = Board::new();
@@ -288,7 +286,11 @@ fn _do_perf() {
     perft.perft(&b, depth);
     // perft.perft_mt_root(b, depth, 12);
     let stop = start.elapsed();
-    println!("Depth: {depth}\t\tMoves: {}\t\tTime: {}ms", perft.mc, stop.as_millis());
+    println!(
+        "Depth: {depth}\t\tMoves: {}\t\tTime: {}ms",
+        perft.mc,
+        stop.as_millis()
+    );
 }
 
 fn _do_wac_tests() {
