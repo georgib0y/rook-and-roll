@@ -14,15 +14,28 @@ impl Zorb {
     }
 
     #[inline]
-    pub fn piece(piece: usize, sq: usize) -> u64 { unsafe { ZORB_ARR[piece*64+sq] } }
+    pub fn piece(piece: usize, sq: usize) -> u64 {
+        unsafe { ZORB_ARR[piece * 64 + sq] }
+    }
 
     #[inline]
-    pub fn colour() -> u64 { unsafe { ZORB_ARR[768] } }
+    pub fn colour() -> u64 {
+        unsafe { ZORB_ARR[768] }
+    }
 
     #[inline]
-    pub fn castle_rights(idx: usize) -> u64 { unsafe { ZORB_ARR[769+idx] } }
+    pub fn castle_rights(idx: usize) -> u64 {
+        unsafe { ZORB_ARR[769 + idx] }
+    }
 
     #[inline]
-    pub fn ep_file(sq: usize) -> u64 { unsafe { ZORB_ARR[773 + (sq%8)] } }
+    pub fn ep_file(sq: usize) -> u64 {
+        unsafe { ZORB_ARR[773 + (sq % 8)] }
+    }
+
+    pub fn print_zorb() {
+        println!("pub const ZORB: [u64; 781] = [");
+        unsafe { ZORB_ARR.iter().for_each(|z| println!("\t{z:#0x},")) }
+        println!("];");
+    }
 }
-

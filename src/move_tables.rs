@@ -19,7 +19,7 @@ impl MT {
     }
 
     pub fn pawn_attacks(colour: usize, sq: usize) -> u64 {
-        unsafe { *MOVE_TABLE.pawn_attacks.get_unchecked(sq + colour*64) }
+        unsafe { *MOVE_TABLE.pawn_attacks.get_unchecked(sq + colour * 64) }
     }
 
     pub fn knight_moves(sq: usize) -> u64 {
@@ -47,14 +47,12 @@ impl MT {
     }
 
     pub fn rays(dir: usize, sq: usize) -> u64 {
-
         unsafe { *RAYS.get_unchecked(dir).get_unchecked(sq) }
     }
 
     pub fn superrays(sq: usize) -> u64 {
         unsafe { *MOVE_TABLE.superrays.get_unchecked(sq) }
     }
-
 }
 
 #[derive(Clone)]
@@ -85,7 +83,10 @@ impl MoveTables {
             occupancy &= ROOK_MASK.get_unchecked(sq);
             occupancy = occupancy.wrapping_mul(*ROOK_MAGIC.get_unchecked(sq));
             occupancy >>= 64 - R_BIT;
-            *self.rook_moves.get_unchecked(sq).get_unchecked(occupancy as usize)
+            *self
+                .rook_moves
+                .get_unchecked(sq)
+                .get_unchecked(occupancy as usize)
         }
     }
 
@@ -109,13 +110,16 @@ impl MoveTables {
             occupancy &= BISHOP_MASK.get_unchecked(sq);
             occupancy = occupancy.wrapping_mul(*BISHOP_MAGIC.get_unchecked(sq));
             occupancy >>= 64 - B_BIT;
-            *self.bishop_moves.get_unchecked(sq).get_unchecked(occupancy as usize)
+            *self
+                .bishop_moves
+                .get_unchecked(sq)
+                .get_unchecked(occupancy as usize)
         }
     }
 }
 
 fn gen_pawn_attack_table() -> Vec<u64> {
-    let mut pawn_attacks = vec![0; 64*2];
+    let mut pawn_attacks = vec![0; 64 * 2];
 
     for (i, sq) in SQUARES.iter().enumerate().take(64) {
         //white
@@ -125,7 +129,7 @@ fn gen_pawn_attack_table() -> Vec<u64> {
 
         //black
         if sq & !R1 > 0 {
-            pawn_attacks[i+64] = (sq & !FH) >> 7 | (sq & !FA) >> 9;
+            pawn_attacks[i + 64] = (sq & !FH) >> 7 | (sq & !FA) >> 9;
         }
     }
 
@@ -215,7 +219,7 @@ fn gen_bishop_move_table() -> Vec<[u64; 512]> {
 
 fn gen_superray() -> Vec<u64> {
     let mut superray = vec![0; 64];
-    for (sq, sray) in superray.iter_mut().enumerate().take(64){
+    for (sq, sray) in superray.iter_mut().enumerate().take(64) {
         *sray = RAYS[0][sq]
             | RAYS[1][sq]
             | RAYS[2][sq]

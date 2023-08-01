@@ -10,18 +10,17 @@ movetype 0-12,  4 bits
 ep, last castle state and last halfmove can all be stored in search - aha not with copy move tho
 */
 
+use crate::board::PIECE_NAMES;
 use crate::move_info::SQ_NAMES;
+use crate::movegen::{get_piece, get_xpiece, CAP_SCORE_OFFSET};
+use crate::search::MAX_DEPTH;
 use crate::Board;
 use std::fmt::{Display, Formatter};
-use std::sync::atomic::AtomicU32;
-use crate::board::PIECE_NAMES;
-// use crate::move_scorer::CAP_SCORE_OFFSET;
-use crate::movegen::{CAP_SCORE_OFFSET, get_piece, get_xpiece};
-use crate::search::MAX_DEPTH;
-use crate::tt::ORDER;
 
 const PREV_MOVE_SIZE: usize = 16384;
 const PREV_MOVE_MASK: u64 = 0x3FFF;
+
+pub const NULL_MOVE: Move = Move(0);
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,50 +37,62 @@ pub enum MoveType {
     RPromoCap,
     BPromoCap,
     QPromoCap,
-    Ep
+    Ep,
 }
 
 impl MoveType {
     #[inline]
     pub fn kingside(ctm: usize) -> MoveType {
-        if ctm == 0 { MoveType::WKingSide } else { MoveType::BKingSide }
+        if ctm == 0 {
+            MoveType::WKingSide
+        } else {
+            MoveType::BKingSide
+        }
     }
-    
+
     #[inline]
     pub fn queenside(ctm: usize) -> MoveType {
-        if ctm == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide }
+        if ctm == 0 {
+            MoveType::WQueenSide
+        } else {
+            MoveType::BQueenSide
+        }
     }
 
     pub fn is_promo(&self) -> bool {
         match self {
-            MoveType::Promo |
-            MoveType::NPromoCap |
-            MoveType::BPromoCap |
-            MoveType::RPromoCap |
-            MoveType::QPromoCap => true,
+            MoveType::Promo
+            | MoveType::NPromoCap
+            | MoveType::BPromoCap
+            | MoveType::RPromoCap
+            | MoveType::QPromoCap => true,
 
-            _ => false
+            _ => false,
         }
     }
 }
 
 impl Display for MoveType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            MoveType::Quiet => "Quiet",
-            MoveType::Double => "Double",
-            MoveType::Cap => "Cap",
-            MoveType::WKingSide => "W Kingside",
-            MoveType::BKingSide => "B Kingside",
-            MoveType::WQueenSide => "W Queenside",
-            MoveType::BQueenSide => "B Queenside",
-            MoveType::Promo => "Promo",
-            MoveType::NPromoCap => "N Promo Cap",
-            MoveType::RPromoCap => "R Promo Cap",
-            MoveType::BPromoCap => "B Promo Cap",
-            MoveType::QPromoCap => "Q Promo Cap",
-            MoveType::Ep => "Ep",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                MoveType::Quiet => "Quiet",
+                MoveType::Double => "Double",
+                MoveType::Cap => "Cap",
+                MoveType::WKingSide => "W Kingside",
+                MoveType::BKingSide => "B Kingside",
+                MoveType::WQueenSide => "W Queenside",
+                MoveType::BQueenSide => "B Queenside",
+                MoveType::Promo => "Promo",
+                MoveType::NPromoCap => "N Promo Cap",
+                MoveType::RPromoCap => "R Promo Cap",
+                MoveType::BPromoCap => "B Promo Cap",
+                MoveType::QPromoCap => "Q Promo Cap",
+                MoveType::Ep => "Ep",
+            }
+        )
     }
 }
 
@@ -95,7 +106,9 @@ impl Move {
         Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type as u32)
     }
 
-    pub fn _new_from_u32(m: u32) -> Move { Move(m) }
+    pub fn _new_from_u32(m: u32) -> Move {
+        Move(m)
+    }
 
     #[inline]
     pub fn from(&self) -> u32 {
@@ -125,7 +138,13 @@ impl Move {
 
     #[inline]
     pub fn all(&self) -> (usize, usize, usize, usize, MoveType) {
-        (self.from() as usize, self.to() as usize, self.piece() as usize, self.xpiece() as usize, self.move_type())
+        (
+            self.from() as usize,
+            self.to() as usize,
+            self.piece() as usize,
+            self.xpiece() as usize,
+            self.move_type(),
+        )
     }
 
     pub fn new_from_text(text: &str, b: &Board) -> Move {
@@ -140,9 +159,10 @@ impl Move {
 
         let promo_piece = (promo.unwrap_or(12)) as u32;
 
-        let piece = get_piece(b, from)
-            .expect(&format!("couldnt find piece on square {} on board:\n{b}", SQ_NAMES[from as usize]));
-
+        let piece = get_piece(b, from).expect(&format!(
+            "couldnt find piece on square {} on board:\n{b}",
+            SQ_NAMES[from as usize]
+        ));
 
         let mut move_type = MoveType::Quiet;
 
@@ -150,14 +170,22 @@ impl Move {
             move_type = MoveType::Double;
         } else if (piece == 10 || piece == 11) && from.abs_diff(to) == 2 {
             if from < to {
-                move_type = if b.ctm == 0 { MoveType::WKingSide } else { MoveType::BKingSide };
+                move_type = if b.ctm == 0 {
+                    MoveType::WKingSide
+                } else {
+                    MoveType::BKingSide
+                };
             } else if from > to {
-                move_type = if b.ctm == 0 { MoveType::WQueenSide } else { MoveType::BQueenSide };
+                move_type = if b.ctm == 0 {
+                    MoveType::WQueenSide
+                } else {
+                    MoveType::BQueenSide
+                };
             }
         }
 
         let mut xpiece = get_xpiece(b, to).unwrap_or(12);
-        if  xpiece < 12 && promo_piece < 12 {
+        if xpiece < 12 && promo_piece < 12 {
             match promo_piece {
                 2 | 3 => move_type = MoveType::NPromoCap,
                 4 | 5 => move_type = MoveType::RPromoCap,
@@ -180,7 +208,7 @@ impl Move {
     pub fn as_uci_string(&self) -> String {
         let mut mv = String::new();
 
-        let (f,t,_,x,m) = self.all();
+        let (f, t, _, x, m) = self.all();
 
         mv.push_str(SQ_NAMES[f]);
         mv.push_str(SQ_NAMES[t]);
@@ -199,11 +227,12 @@ impl Move {
 
 impl Display for Move {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (fr,t,p,x,m) = self.all();
+        let (fr, t, p, x, m) = self.all();
 
         write!(
-            f, "From: {} ({})\tTo:{} ({})\tPiece: {} ({})\tXPiece: {} ({})\tMove Type: {}",
-            fr, SQ_NAMES[fr], t, SQ_NAMES[t], p, PIECE_NAMES[p], x, PIECE_NAMES[x], m 
+            f,
+            "From: {} ({})\tTo:{} ({})\tPiece: {} ({})\tXPiece: {} ({})\tMove Type: {}",
+            fr, SQ_NAMES[fr], t, SQ_NAMES[t], p, PIECE_NAMES[p], x, PIECE_NAMES[x], m
         )
     }
 }
@@ -236,12 +265,14 @@ fn text_from_promo_piece(promo_piece: u32) -> String {
 
 #[derive(Clone)]
 pub struct PrevMoves {
-    prev: Box<[u8; PREV_MOVE_SIZE]>
+    prev: Box<[u8; PREV_MOVE_SIZE]>,
 }
 
 impl PrevMoves {
     pub fn new() -> PrevMoves {
-        PrevMoves { prev: Box::new([0;PREV_MOVE_SIZE]) }
+        PrevMoves {
+            prev: Box::new([0; PREV_MOVE_SIZE]),
+        }
     }
 
     pub fn add(&mut self, hash: u64) {
@@ -264,13 +295,17 @@ pub struct KillerMoves {
 
 impl KillerMoves {
     pub fn new() -> KillerMoves {
-        KillerMoves { killer_moves: vec![(None, None); MAX_DEPTH] }
+        KillerMoves {
+            killer_moves: vec![(None, None); MAX_DEPTH],
+        }
     }
 
     pub fn add(&mut self, m: Move, depth: usize) {
         if let Some(killers) = self.killer_moves.get_mut(depth) {
             // dont add the same move in twice
-            if Some(m) == killers.0 { return; }
+            if Some(m) == killers.0 {
+                return;
+            }
 
             // shuffle the killer moves upwards
             killers.1 = killers.0;
@@ -280,62 +315,14 @@ impl KillerMoves {
 
     // returns an option containing an i32 for move scoring or none
     pub fn get_move_score(&self, m: Move, depth: usize) -> Option<i32> {
-        self.killer_moves.get(depth)
-            .and_then(|(k1, k2)| {
-                if &Some(m) == k1 { Some(CAP_SCORE_OFFSET+1) }
-                else if &Some(m) == k2 { Some(CAP_SCORE_OFFSET) }
-                else { None }
-            })
-    }
-}
-
-
-pub trait HTable {
-    fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32;
-}
-
-pub struct HistoryTable {
-    history: Vec<[[u32; 64]; 64]>
-}
-
-impl HistoryTable {
-    pub fn new() -> HistoryTable {
-        let mut history = Vec::with_capacity(2 * 64 * 64);
-        history.push([[0; 64]; 64]);
-        history.push([[0; 64]; 64]);
-        HistoryTable { history }
-    }
-
-    pub fn insert(&mut self, colour_to_move: usize, from: usize, to: usize, depth: usize) {
-        self.history[colour_to_move][from][to] += (depth * depth) as u32
-    }
-}
-
-impl HTable for HistoryTable {
-    fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32 {
-        self.history[colour_to_move][from][to]
-    }
-}
-
-pub struct AtomicHistoryTable {
-    history: Vec<AtomicU32>
-}
-
-impl AtomicHistoryTable {
-    pub fn new() -> AtomicHistoryTable {
-        let mut history = Vec::with_capacity(2 * 64 * 64);
-        (0..2 * 64 * 64).for_each(|_| history.push(AtomicU32::new(0)));
-        AtomicHistoryTable { history }
-    }
-
-    pub fn insert(&self, colour_to_move: usize, from: usize, to: usize, depth: usize) {
-        self.history[colour_to_move*64*64 + from*64 + to]
-            .store((depth*depth) as u32, ORDER)
-    }
-}
-
-impl HTable for AtomicHistoryTable {
-    fn get(&self, colour_to_move: usize, from: usize, to: usize) -> u32 {
-        self.history[colour_to_move*64*64 + from*64 + to].load(ORDER)
+        self.killer_moves.get(depth).and_then(|(k1, k2)| {
+            if &Some(m) == k1 {
+                Some(CAP_SCORE_OFFSET + 1)
+            } else if &Some(m) == k2 {
+                Some(CAP_SCORE_OFFSET)
+            } else {
+                None
+            }
+        })
     }
 }

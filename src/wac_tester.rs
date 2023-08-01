@@ -1,10 +1,9 @@
-use std::fs::{read_to_string};
 use crate::board::PIECE_NAMES;
 use crate::move_info::SQ_NAMES;
 use crate::moves::Move;
-use crate::search::iterative_deepening;
-use crate::tt::TTableST;
-use crate::uci::{GameState};
+use crate::tt::TTable;
+use crate::uci::{BestMoveFinder, GameState};
+use std::fs::read_to_string;
 
 pub fn wac_tests() {
     let wacs = read_to_string("./wac").unwrap();
@@ -12,10 +11,12 @@ pub fn wac_tests() {
     let num_tests = 20;
     let mut tested = 0;
 
-    let mut game_state = GameState::<TTableST>::new_single_threaded("","");
+    let mut game_state = GameState::<TTable>::new_single_thread("", "");
 
     for line in wacs.lines().take(num_tests) {
-        if line.trim().is_empty() { break; }
+        if line.trim().is_empty() {
+            break;
+        }
         let (position, wac_id) = line.split_once("; ").unwrap();
         // id == WAC.001
         let id = String::from(wac_id.split("\"").skip(1).next().unwrap());
@@ -26,7 +27,7 @@ pub fn wac_tests() {
         game_state.ucinewgame();
         game_state.position(&pos_cmd);
 
-        let m = game_state.find_best_move();
+        let m = game_state.find_best_move().unwrap();
         tested += 1;
 
         if move_matches_bm(m, bm) {
