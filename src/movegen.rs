@@ -33,10 +33,6 @@ impl MoveSet {
     }
 }
 
-// TODO turn movelist into an iterator that chunk generates moves (ie attacks then quiets)
-// in the iterator, have it filter the illegal moves and request the next chunk (ie call gen_quiet)
-// when needed
-
 pub struct MoveList<'a> {
     pub moves: Vec<Move>,
     move_scores: Vec<i32>,

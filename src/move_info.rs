@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 pub const SQUARES: [u64; 65] = [
     0x1,
     0x2,
@@ -371,7 +373,10 @@ pub const SQ_NAMES: [&str; 64] = [
 6: down left
 7: left
 */
-pub const RAYS: [[u64; 65]; 8] = [
+pub static RAYS: OnceLock<Box<[[u64; 65]; 8]>> = OnceLock::new(); 
+
+pub fn init_rays() {
+    RAYS.set( Box::new([
     [
         0x0,
         0x100,
@@ -908,8 +913,8 @@ pub const RAYS: [[u64; 65]; 8] = [
         0x7F00000000000000,
         0,
     ],
-];
-
+])).unwrap();
+}
 // all PST are considered from whites perspective
 pub struct PST;
 

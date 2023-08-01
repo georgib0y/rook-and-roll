@@ -13,8 +13,6 @@ use crate::moves::Move;
 use crate::perft::Perft;
 use crate::tt::{AtomicTTable, TTable};
 use crate::uci::{BestMoveFinder, GameState};
-use crate::wac_tester::wac_tests;
-// use crate::wac_tester::wac_tests;
 use crate::zorbist::Zorb;
 
 mod board;
@@ -69,12 +67,11 @@ fn main() {
 
     // Zorb::print_zorb();
     // return;
-    // _do_perf();
+    _do_perf();
     // _do_search();
-    // return;
     // _debug();
     // _do_wac_tests();
-    // return;
+    return;
 
     // set up logger
     // let file = File::options()
@@ -291,8 +288,4 @@ fn _do_perf() {
         perft.mc,
         stop.as_millis()
     );
-}
-
-fn _do_wac_tests() {
-    wac_tests();
 }

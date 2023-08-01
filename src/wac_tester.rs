@@ -1,11 +1,14 @@
+use std::fs::read_to_string;
 use crate::board::PIECE_NAMES;
+use crate::init;
 use crate::move_info::SQ_NAMES;
 use crate::moves::Move;
 use crate::tt::TTable;
-use crate::uci::{BestMoveFinder, GameState};
-use std::fs::read_to_string;
+use crate::uci::{BestMoveFinder, GameState, PositionCommandType};
 
-pub fn wac_tests() {
+#[test]
+fn wac_tests() {
+    init();
     let wacs = read_to_string("./wac").unwrap();
     let mut unmatched_ids = Vec::new();
     let num_tests = 20;
@@ -22,10 +25,10 @@ pub fn wac_tests() {
         let id = String::from(wac_id.split("\"").skip(1).next().unwrap());
 
         let (fen, bm) = position.split_once(" bm ").unwrap();
-        let pos_cmd = format!("fen {fen}");
+        let pos = PositionCommandType::new_from_pos_args(fen).unwrap();
 
         game_state.ucinewgame();
-        game_state.position(&pos_cmd);
+        game_state.position(pos).unwrap();
 
         let m = game_state.find_best_move().unwrap();
         tested += 1;

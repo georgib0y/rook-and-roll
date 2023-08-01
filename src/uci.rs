@@ -1,21 +1,43 @@
+use crate::fen::InvalidFenError;
 use crate::lazy_smp::lazy_smp;
+use crate::movegen::MoveList;
 use crate::moves::{PrevMoves, NULL_MOVE};
 use crate::search::iterative_deepening;
 use crate::tt::{AtomicTTable, TTable, TT};
-use crate::tt_entry::{Entry, NoEntry, TTEntry};
-use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, Ucinewgame};
+use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, UciNewGame};
 use crate::{Board, Move};
 use log::info;
-use std::cell::Cell;
 use std::io;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
+pub enum PositionCommandType {
+    Startpos,
+    Fen { fen: String, moves: Vec<String> },
+}
+
+impl PositionCommandType {
+    pub fn new_from_pos_args(position_args: &str) -> Result<PositionCommandType, ()> {
+        let split = position_args.trim().split(' ').collect::<Vec<_>>();
+
+        match split.first() {
+            Some(&"startpos") => Ok(PositionCommandType::Startpos),
+            Some(&"fen") => {
+                let fen = split.get(1).map(|s| s.to_string()).ok_or(())?;
+
+                let moves = split.into_iter().skip(3).map(|s| s.into()).collect();
+
+                Ok(PositionCommandType::Fen { fen, moves })
+            }
+            Some(_) | None => Err(()),
+        }
+    }
+}
+
 enum UciCommand {
-    Ucinewgame,
+    UciNewGame,
     UciInfo,
     IsReady,
-    Position(String),
+    Position(PositionCommandType),
     Go(String),
     Quit,
 }
@@ -25,10 +47,10 @@ impl UciCommand {
         let (command, args) = line.split_at(line.find(' ').unwrap_or(line.len()));
 
         match command.trim() {
-            "ucinewgame" => Ok(Ucinewgame),
+            "ucinewgame" => Ok(UciNewGame),
             "uci" => Ok(UciInfo),
             "isready" => Ok(IsReady),
-            "position" => Ok(Position(args.to_string())),
+            "position" => Ok(Position(PositionCommandType::new_from_pos_args(args)?)),
             "go" => Ok(Go(args.to_string())),
             "quit" => Ok(Quit),
             _ => Err(()),
@@ -84,13 +106,20 @@ where
                 .expect("Uci input failed");
             info!(target: "input", "{buffer}");
 
-            let Ok(command) = UciCommand::new(&buffer) else { continue };
+            let Ok(command) = UciCommand::new(&buffer) else {
+                println!("Unknown command: {}", buffer);
+                continue;
+            };
 
             match command {
-                Ucinewgame => self.ucinewgame(),
+                UciNewGame => self.ucinewgame(),
                 UciInfo => self.uci_info(),
                 IsReady => self.is_ready(),
-                Position(args) => self.position(&args),
+                Position(pos) => {
+                    if let Err(err) = self.position(pos) {
+                        println!("{}", err)
+                    }
+                }
                 Go(args) => self.go(&args),
                 Quit => break,
             }
@@ -111,45 +140,30 @@ where
         println!("readyok");
     }
 
-    pub(crate) fn position(&mut self, buffer: &str) {
-        let mut board = if buffer.contains("fen") {
-            // split after postition fen ...
-            let mut fen = buffer.split_once("fen ").unwrap().1;
-            // if there are extra moves afterwards (fen ... moves e3g8 f4f4 ... split before then
-            if fen.contains("moves") {
-                fen = fen.split_once(" moves").unwrap().0;
-            }
-            // println!("{fen}");
-            Board::new_fen(fen).unwrap()
-        } else {
-            // if "startpos"
-            Board::new()
-        };
-
+    pub fn position(&mut self, position_type: PositionCommandType) -> Result<(), InvalidFenError> {
         let mut prev_moves = PrevMoves::new();
 
-        if buffer.contains("moves") {
-            let moves: Vec<&str> = buffer
-                .trim()
-                .split_once("moves ")
-                .unwrap()
-                .1
-                .split(' ')
-                .collect();
+        let mut board = match position_type {
+            PositionCommandType::Startpos => Board::new(),
+            PositionCommandType::Fen { fen, moves } => {
+                let mut board = Board::new_fen(&fen)?;
+                for m in moves {
+                    let mv = Move::new_from_text(&m, &board);
+                    board = board.copy_make(mv);
+                    prev_moves.add(board.hash);
+                }
 
-            for m in moves {
-                let mv = Move::new_from_text(m, &board);
-                board = board.copy_make(mv);
-                let hash = board.hash;
-                prev_moves.add(hash);
+                board
             }
-        }
+        };
 
         self.prev_moves = Some(prev_moves);
         self.board = Some(board);
+
+        Ok(())
     }
 
-    pub(crate) fn go(&mut self, _args: &str) {
+    pub fn go(&mut self, _args: &str) {
         let best_move = self.find_best_move().unwrap_or(NULL_MOVE);
         let out = format!("bestmove {}", best_move.as_uci_string());
 
@@ -157,7 +171,7 @@ where
         println!("{out}");
     }
 
-    pub(crate) fn ucinewgame(&mut self) {
+    pub fn ucinewgame(&mut self) {
         self.tt.clear();
         self.board = Some(Board::new());
         self.prev_moves = Some(PrevMoves::new());

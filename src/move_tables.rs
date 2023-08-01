@@ -1,61 +1,74 @@
+use std::sync::OnceLock;
+
 use crate::move_info::*;
 use rand::prelude::*;
 
 pub const R_BIT: i32 = 12;
 pub const B_BIT: i32 = 9;
 
-pub static mut MOVE_TABLE: MoveTables = MoveTables::empty();
+pub static MOVE_TABLE: OnceLock<MoveTables> = OnceLock::new();
 
 pub struct MT;
 
 impl MT {
-    pub unsafe fn init() {
-        MOVE_TABLE.pawn_attacks = gen_pawn_attack_table();
-        MOVE_TABLE.knight_moves = gen_knight_move_table();
-        MOVE_TABLE.king_moves = gen_king_move_table();
-        MOVE_TABLE.rook_moves = gen_rook_move_table();
-        MOVE_TABLE.bishop_moves = gen_bishop_move_table();
-        MOVE_TABLE.superrays = gen_superray();
+    pub fn init() {
+        init_rays();
+
+        MOVE_TABLE
+            .set(MoveTables {
+                pawn_attacks: gen_pawn_attack_table(),
+                knight_moves: gen_knight_move_table(),
+                king_moves: gen_king_move_table(),
+                rook_moves: gen_rook_move_table(),
+                bishop_moves: gen_bishop_move_table(),
+                superrays: gen_superray(),
+            })
+            .unwrap();
     }
 
     pub fn pawn_attacks(colour: usize, sq: usize) -> u64 {
-        unsafe { *MOVE_TABLE.pawn_attacks.get_unchecked(sq + colour * 64) }
+        *MOVE_TABLE
+            .get()
+            .unwrap()
+            .pawn_attacks
+            .get(sq + colour * 64)
+            .unwrap()
     }
 
     pub fn knight_moves(sq: usize) -> u64 {
-        unsafe { *MOVE_TABLE.knight_moves.get_unchecked(sq) }
+        *MOVE_TABLE.get().unwrap().knight_moves.get(sq).unwrap()
     }
 
     pub fn king_moves(sq: usize) -> u64 {
-        unsafe { *MOVE_TABLE.king_moves.get_unchecked(sq) }
+        *MOVE_TABLE.get().unwrap().king_moves.get(sq).unwrap()
     }
 
     pub fn rook_moves(occ: u64, sq: usize) -> u64 {
-        unsafe { MOVE_TABLE.get_rook_moves(occ, sq) }
+        MOVE_TABLE.get().unwrap().get_rook_moves(occ, sq)
     }
 
     pub fn rook_xray_moves(occ: u64, blockers: u64, sq: usize) -> u64 {
-        unsafe { MOVE_TABLE.get_rook_xray(occ, blockers, sq) }
+        MOVE_TABLE.get().unwrap().get_rook_xray(occ, blockers, sq)
     }
 
     pub fn bishop_moves(occ: u64, sq: usize) -> u64 {
-        unsafe { MOVE_TABLE.get_bishop_moves(occ, sq) }
+        MOVE_TABLE.get().unwrap().get_bishop_moves(occ, sq)
     }
 
     pub fn bishop_xray_moves(occ: u64, blockers: u64, sq: usize) -> u64 {
-        unsafe { MOVE_TABLE.get_bishop_xray(occ, blockers, sq) }
+        MOVE_TABLE.get().unwrap().get_bishop_xray(occ, blockers, sq)
     }
 
     pub fn rays(dir: usize, sq: usize) -> u64 {
-        unsafe { *RAYS.get_unchecked(dir).get_unchecked(sq) }
+        *RAYS.get().unwrap().get(dir).unwrap().get(sq).unwrap()
     }
 
     pub fn superrays(sq: usize) -> u64 {
-        unsafe { *MOVE_TABLE.superrays.get_unchecked(sq) }
+        *MOVE_TABLE.get().unwrap().superrays.get(sq).unwrap()
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MoveTables {
     pub pawn_attacks: Vec<u64>,
     pub knight_moves: Vec<u64>,
@@ -66,17 +79,6 @@ pub struct MoveTables {
 }
 
 impl MoveTables {
-    pub const fn empty() -> MoveTables {
-        MoveTables {
-            pawn_attacks: Vec::new(),
-            knight_moves: Vec::new(),
-            king_moves: Vec::new(),
-            rook_moves: Vec::new(),
-            bishop_moves: Vec::new(),
-            superrays: Vec::new(),
-        }
-    }
-
     #[inline]
     pub fn get_rook_moves(&self, mut occupancy: u64, sq: usize) -> u64 {
         unsafe {
@@ -220,14 +222,15 @@ fn gen_bishop_move_table() -> Vec<[u64; 512]> {
 fn gen_superray() -> Vec<u64> {
     let mut superray = vec![0; 64];
     for (sq, sray) in superray.iter_mut().enumerate().take(64) {
-        *sray = RAYS[0][sq]
-            | RAYS[1][sq]
-            | RAYS[2][sq]
-            | RAYS[3][sq]
-            | RAYS[4][sq]
-            | RAYS[5][sq]
-            | RAYS[6][sq]
-            | RAYS[7][sq]
+        let rays = RAYS.get().unwrap();
+        *sray = rays[0][sq]
+            | rays[1][sq]
+            | rays[2][sq]
+            | rays[3][sq]
+            | rays[4][sq]
+            | rays[5][sq]
+            | rays[6][sq]
+            | rays[7][sq]
     }
 
     superray

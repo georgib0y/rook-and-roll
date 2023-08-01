@@ -310,6 +310,8 @@ impl<'a, T: TT> Searcher<'a, T> {
             alpha = eval;
         }
 
+        // TODO try get_move_set(Attacks) here again?
+
         let ml = MoveList::get_moves(
             board,
             MoveSet::Attacks,
