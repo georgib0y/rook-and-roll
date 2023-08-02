@@ -24,3 +24,10 @@ lto = true
 
 [profile.test]
 #opt-level = 3
+
+[workspace]
+members = [
+    "chess",
+    "uci",
+    "dummy"
+]
