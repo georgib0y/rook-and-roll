@@ -1,11 +1,8 @@
-use crate::eval::{CHECKMATE, MATED};
 use crate::moves::Move;
-use crate::search::MAX_DEPTH;
 use crate::tt_entry::{AtomicTTEntry, Entry, EntryType, NoEntry, TTEntry};
-use std::any::{Any, TypeId};
-use std::cell::{Cell, RefCell};
-use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
+use std::cell::Cell;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 const TTABLE_SIZE: usize = 1 << 20; // 2^20
 const TT_IDX_MASK: u64 = 0xFFFFF;
@@ -43,7 +40,6 @@ pub trait TT {
     fn clear(&self) {
         self.get_tt().iter().for_each(|entry| entry.clear())
     }
-    // fn get_arc(&self) -> TTableMT;
 }
 
 pub struct TTable {
@@ -67,15 +63,15 @@ impl TT for TTable {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AtomicTTable {
-    ttable: Arc<Box<[AtomicTTEntry]>>,
+    ttable: Box<[AtomicTTEntry]>,
 }
 
 impl AtomicTTable {
     pub fn new() -> Arc<AtomicTTable> {
         Arc::new(AtomicTTable {
-            ttable: Arc::new((0..TTABLE_SIZE).map(|_| AtomicTTEntry::empty()).collect()),
+            ttable: (0..TTABLE_SIZE).map(|_| AtomicTTEntry::empty()).collect(),
         })
     }
 }
@@ -94,20 +90,28 @@ impl TT for NoTTable {
     fn get_tt(&self) -> &[Self::TTEntryType] {
         &[]
     }
-    fn get_score(&self, hash: u64, depth: usize, alpha: i32, beta: i32, ply: usize) -> Option<i32> {
+    fn get_score(
+        &self,
+        _hash: u64,
+        _depth: usize,
+        _alpha: i32,
+        _beta: i32,
+        _ply: usize,
+    ) -> Option<i32> {
         None
     }
-    fn get_best(&self, hash: u64) -> Option<Move> {
+
+    fn get_best(&self, _hash: u64) -> Option<Move> {
         None
     }
     fn insert(
         &self,
-        hash: u64,
-        score: i32,
-        e_type: EntryType,
-        depth: usize,
-        best: Option<Move>,
-        ply: usize,
+        _hash: u64,
+        _score: i32,
+        _e_type: EntryType,
+        _depth: usize,
+        _best: Option<Move>,
+        _ply: usize,
     ) {
     }
     fn clear(&self) {}

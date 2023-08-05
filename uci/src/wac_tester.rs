@@ -1,14 +1,14 @@
+use crate::game_state::{BestMoveFinder, GameState};
+use crate::uci::PositionCommandType;
+use chess::board::PIECE_NAMES;
+use chess::move_info::SQ_NAMES;
+use chess::moves::Move;
+use chess::tt::TTable;
 use std::fs::read_to_string;
-use crate::board::PIECE_NAMES;
-use crate::init;
-use crate::move_info::SQ_NAMES;
-use crate::moves::Move;
-use crate::tt::TTable;
-use crate::uci::{BestMoveFinder, GameState, PositionCommandType};
 
 #[test]
 fn wac_tests() {
-    init();
+    chess::init();
     let wacs = read_to_string("./wac").unwrap();
     let mut unmatched_ids = Vec::new();
     let num_tests = 20;

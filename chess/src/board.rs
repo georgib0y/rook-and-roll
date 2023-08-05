@@ -1,8 +1,8 @@
-use crate::board_builder::BoardBuilder;
 use crate::eval::{gen_mat_value, gen_pst_value};
 use crate::move_info::SQUARES;
 use crate::movegen::{get_piece, get_xpiece};
 use crate::moves::{Move, MoveType};
+use crate::next_board_builder::NextBoardBuilder;
 use crate::zorbist::Zorb;
 use std::fmt;
 
@@ -57,11 +57,6 @@ const DEFAULT_UTIL: [u64; 3] = [
         | DEFAULT_PIECES[11], // all
 ];
 
-pub const WKS_STATE: usize = 0;
-pub const WQS_STATE: usize = 1;
-pub const BKS_STATE: usize = 2;
-pub const BQS_STATE: usize = 3;
-
 // 0 - white to move, 1 - black to move
 #[derive(Copy, Clone)]
 pub struct Board {
@@ -102,47 +97,18 @@ impl Board {
     pub fn copy_make(&self, m: Move) -> Board {
         let (from, to, piece, xpiece, move_type) = m.all();
 
-        BoardBuilder::new(self, from, to, piece)
+        NextBoardBuilder::new(self, from, to, piece)
             .apply_move(to, piece, xpiece, move_type)
             .build()
     }
 }
 
-#[test]
-fn inc_value_update() {
-    crate::init();
-    let board =
-        Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
-
-    let quiet_move = Move::new(0, 1, ROOK as u32, 0, MoveType::Quiet);
-    let quiet_board = board.copy_make(quiet_move);
-
-    let mat = gen_mat_value(&quiet_board);
-    let (mg, eg) = gen_pst_value(&quiet_board);
-    let mg_quiet = mat + mg;
-    let eg_quiet = mat + eg;
-
-    assert_eq!(quiet_board.mg_value, mg_quiet);
-    assert_eq!(quiet_board.eg_value, eg_quiet);
-
-    let cap_move = Move::new(25, 32, BISHOP as u32, KNIGHT as u32 + 1, MoveType::Cap);
-    let cap_board = board.copy_make(cap_move);
-
-    let mat = gen_mat_value(&cap_board);
-    let (mg, eg) = gen_pst_value(&cap_board);
-    let mg_cap = mat + mg;
-    let eg_cap = mat + eg;
-
-    assert_eq!(cap_board.mg_value, mg_cap);
-    assert_eq!(cap_board.eg_value, eg_cap);
-}
+const SQ_PIECES: [&str; 12] = [
+    "P ", "p ", "N ", "n ", "R ", "r ", "B ", "b ", "Q ", "q ", "K ", "k ",
+];
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const SQ_PIECES: [&str; 12] = [
-            "P ", "p ", "N ", "n ", "R ", "r ", "B ", "b ", "Q ", "q ", "K ", "k ",
-        ];
-
         let add_sq = |s, sq| {
             format!(
                 "{s}{}",
@@ -164,6 +130,11 @@ impl fmt::Display for Board {
         write!(f, "{}", out)
     }
 }
+
+pub const WKS_STATE: usize = 0;
+pub const WQS_STATE: usize = 1;
+pub const BKS_STATE: usize = 2;
+pub const BQS_STATE: usize = 3;
 
 pub fn gen_hash(board: Board) -> u64 {
     let mut hash = 0;
@@ -228,4 +199,33 @@ pub fn _print_bb(bb: u64) {
     out.push_str("   A  B  C  D  E  F  G  H\n");
 
     println!("{}", out);
+}
+
+#[test]
+fn inc_value_update() {
+    crate::init();
+    let board =
+        Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
+
+    let quiet_move = Move::new(0, 1, ROOK as u32, 0, MoveType::Quiet);
+    let quiet_board = board.copy_make(quiet_move);
+
+    let mat = gen_mat_value(&quiet_board);
+    let (mg, eg) = gen_pst_value(&quiet_board);
+    let mg_quiet = mat + mg;
+    let eg_quiet = mat + eg;
+
+    assert_eq!(quiet_board.mg_value, mg_quiet);
+    assert_eq!(quiet_board.eg_value, eg_quiet);
+
+    let cap_move = Move::new(25, 32, BISHOP as u32, KNIGHT as u32 + 1, MoveType::Cap);
+    let cap_board = board.copy_make(cap_move);
+
+    let mat = gen_mat_value(&cap_board);
+    let (mg, eg) = gen_pst_value(&cap_board);
+    let mg_cap = mat + mg;
+    let eg_cap = mat + eg;
+
+    assert_eq!(cap_board.mg_value, mg_cap);
+    assert_eq!(cap_board.eg_value, eg_cap);
 }

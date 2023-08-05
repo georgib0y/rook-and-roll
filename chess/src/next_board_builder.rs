@@ -4,7 +4,7 @@ use crate::move_info::{PST, SQUARES};
 use crate::moves::MoveType;
 use crate::zorbist::Zorb;
 
-pub struct BoardBuilder {
+pub struct NextBoardBuilder {
     pieces: [u64; 12],
     util: [u64; 3],
     ctm: usize,
@@ -16,15 +16,15 @@ pub struct BoardBuilder {
     eg_value: i32,
 }
 
-impl BoardBuilder {
-    pub fn new(board: &Board, from: usize, to: usize, piece: usize) -> BoardBuilder {
+impl NextBoardBuilder {
+    pub fn new(board: &Board, from: usize, to: usize, piece: usize) -> NextBoardBuilder {
         let ft = SQUARES[from] | SQUARES[to];
         let mut hash =
             copy_hash(board, piece, from, to) ^ (board.ep < 64) as u64 * Zorb::ep_file(board.ep);
         let (mg_value, eg_value) = copy_values(board, piece, from, to);
         let castle_state = copy_castle_state(board.castle_state, piece, from, to, &mut hash);
 
-        BoardBuilder {
+        NextBoardBuilder {
             pieces: copy_pieces(board, piece, ft),
             util: copy_util(board, ft),
             ctm: board.ctm,

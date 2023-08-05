@@ -21,13 +21,15 @@ debug = 2
 [profile.release]
 lto = true
 
+[profile.optimised-tests]
+inherits = "release"
+opt-level = 3
+lto = true
 
-[profile.test]
-#opt-level = 3
 
 [workspace]
 members = [
     "chess",
     "uci",
-    "dummy"
+    "web-dummy"
 ]
