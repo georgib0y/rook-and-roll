@@ -1,6 +1,10 @@
-use crate::board::Board;
-use crate::movegen::*;
-use crate::moves::{Move, PrevMoves};
+use crate::board::board::Board;
+use crate::board::board2::Board2;
+use crate::movegen::move_list::StackMoveList;
+use crate::movegen::movegen::*;
+use crate::movegen::movegen_iters::movegen_iter::{next_check_moves, next_moves};
+use crate::movegen::moves::{Move, PrevMoves};
+use crate::movegen::piece_gen::{gen_all_moves, gen_check_moves};
 
 pub struct Perft {
     pub mc: usize,
@@ -22,16 +26,23 @@ impl Perft {
             return;
         }
 
-        let move_set = MoveSet::get_move_set(MoveSet::All, board);
-        let move_list = MoveList::get_moves_unscored(board, move_set);
+        let mut ml = StackMoveList::new();
 
-        for m in move_list.moves {
+        if is_in_check(board) {
+            gen_check_moves(board, &mut ml);
+        } else {
+            gen_all_moves(board, &mut ml);
+        }
+
+        for m in ml {
             let b = board.copy_make(m);
-            if move_set != MoveSet::Check && (moved_into_check(&b, m))
-                || !is_legal_move(&b, m, &self.prev_moves)
-            {
+
+            if moved_into_check(&b, m) || !is_legal_move(&b, m, &self.prev_moves) {
                 continue;
             }
+
+            // println!("{b}\n{m}");
+
             self.perft(&b, depth - 1);
         }
     }
@@ -45,16 +56,20 @@ impl Perft {
         }
 
         let mut total = 0;
-        let move_set = MoveSet::get_move_set(MoveSet::All, &board);
-        let move_list = MoveList::get_moves_unscored(&board, move_set);
 
-        for m in move_list.moves {
+        let mut ml = StackMoveList::new();
+        if is_in_check(&board) {
+            gen_check_moves(&board, &mut ml);
+        } else {
+            gen_all_moves(&board, &mut ml);
+        }
+
+        for m in ml {
             let b = board.copy_make(m);
-            if move_set != MoveSet::Check && (moved_into_check(&b, m))
-                || !is_legal_move(&b, m, &self.prev_moves)
-            {
+            if moved_into_check(&b, m) || !is_legal_move(&b, m, &self.prev_moves) {
                 continue;
             }
+
             let count = self.perftree(&b, depth - 1);
             println!("{} {}", m.as_uci_string(), count);
             total += count
@@ -68,17 +83,21 @@ impl Perft {
             return 1;
         }
 
-        let mut move_count = 0;
-        let move_set = MoveSet::get_move_set(MoveSet::All, board);
-        let move_list = MoveList::get_moves_unscored(board, move_set);
+        let mut ml = StackMoveList::new();
+        if is_in_check(&board) {
+            gen_check_moves(&board, &mut ml);
+        } else {
+            gen_all_moves(&board, &mut ml);
+        }
 
-        for m in move_list.moves {
+        let mut move_count = 0;
+
+        for m in ml {
             let b = board.copy_make(m);
-            if move_set != MoveSet::Check && (moved_into_check(&b, m))
-                || !is_legal_move(&b, m, &self.prev_moves)
-            {
+            if moved_into_check(&b, m) || !is_legal_move(&b, m, &self.prev_moves) {
                 continue;
             }
+
             move_count += self.perftree(&b, depth - 1);
         }
 

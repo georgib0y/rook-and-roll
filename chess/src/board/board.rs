@@ -1,11 +1,15 @@
-use crate::eval::{gen_mat_value, gen_pst_value};
-use crate::move_info::SQUARES;
-use crate::movegen::{get_piece, get_xpiece};
-use crate::moves::{Move, MoveType};
-use crate::next_board_builder::NextBoardBuilder;
-use crate::zorbist::Zorb;
-use std::fmt;
+use crate::board::board_copier::{BoardCopier, BoardCopierWithHash, BoardCopierWithoutHash};
+use crate::board::zorbist::Zorb;
+use crate::movegen::move_info::SQUARES;
+use crate::movegen::movegen::{get_piece, get_xpiece};
+use crate::movegen::moves::Move;
+use crate::search::eval::{gen_mat_value, gen_pst_value};
+use std::marker::PhantomData;
+use std::{fmt, num};
 
+pub const WHITE: usize = 0;
+pub const BLACK: usize = 1;
+pub const ALL_PIECES: usize = 2;
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 2;
 pub const ROOK: usize = 4;
@@ -57,6 +61,8 @@ const DEFAULT_UTIL: [u64; 3] = [
         | DEFAULT_PIECES[11], // all
 ];
 
+type Copier = BoardCopierWithHash;
+
 // 0 - white to move, 1 - black to move
 #[derive(Copy, Clone)]
 pub struct Board {
@@ -73,10 +79,10 @@ pub struct Board {
 
 impl Board {
     pub fn new() -> Board {
-        let mut board = Board {
+        let mut board: Board = Board {
             pieces: DEFAULT_PIECES,
             util: DEFAULT_UTIL,
-            ctm: 0,
+            ctm: WHITE,
             castle_state: 0b1111,
             ep: 64,
             halfmove: 0,
@@ -94,12 +100,58 @@ impl Board {
         board
     }
 
-    pub fn copy_make(&self, m: Move) -> Board {
-        let (from, to, piece, xpiece, move_type) = m.all();
+    #[inline]
+    pub fn pieces<T: Into<usize>>(&self, piece: T) -> u64 {
+        self.pieces[piece.into()]
+    }
 
-        NextBoardBuilder::new(self, from, to, piece)
-            .apply_move(to, piece, xpiece, move_type)
-            .build()
+    #[inline]
+    pub fn pawns(&self, ctm: usize) -> u64 {
+        self.pieces[ctm]
+    }
+
+    #[inline]
+    pub fn knights(&self, ctm: usize) -> u64 {
+        self.pieces[KNIGHT + ctm]
+    }
+
+    #[inline]
+    pub fn rooks(&self, ctm: usize) -> u64 {
+        self.pieces[ROOK + ctm]
+    }
+
+    #[inline]
+    pub fn bishops(&self, ctm: usize) -> u64 {
+        self.pieces[BISHOP + ctm]
+    }
+
+    #[inline]
+    pub fn queens(&self, ctm: usize) -> u64 {
+        self.pieces[QUEEN + ctm]
+    }
+
+    #[inline]
+    pub fn king(&self, ctm: usize) -> u64 {
+        self.pieces[KING + ctm]
+    }
+
+    #[inline]
+    pub fn king_idx(&self, ctm: usize) -> usize {
+        self.king(ctm).trailing_zeros() as usize
+    }
+
+    #[inline]
+    pub fn occ(&self, ctm: usize) -> u64 {
+        self.util[ctm]
+    }
+
+    #[inline]
+    pub fn all_occ(&self) -> u64 {
+        self.util[ALL_PIECES]
+    }
+
+    pub fn copy_make(&self, m: Move) -> Board {
+        Copier::copy(self, m)
     }
 }
 
@@ -164,7 +216,7 @@ pub fn gen_hash(board: Board) -> u64 {
         hash ^= Zorb::castle_rights(BQS_STATE);
     }
     if board.ep < 64 {
-        hash ^= Zorb::ep_file(board.ep);
+        hash ^= Zorb::ep_file(board.ep as usize);
     }
 
     hash
@@ -175,7 +227,7 @@ pub fn gen_hash(board: Board) -> u64 {
 macro_rules! print_bb {
     ( $( $args:expr ),* ) => {
         {
-            $( print_bb($args); )*
+            $( crate::board::board::_print_bb($args); )*
         }
     };
 }
@@ -207,7 +259,7 @@ fn inc_value_update() {
     let board =
         Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
 
-    let quiet_move = Move::new(0, 1, ROOK as u32, 0, MoveType::Quiet);
+    let quiet_move = Move::new(0, 1, ROOK as u32, 0, crate::movegen::moves::MoveType::Quiet);
     let quiet_board = board.copy_make(quiet_move);
 
     let mat = gen_mat_value(&quiet_board);
@@ -218,7 +270,13 @@ fn inc_value_update() {
     assert_eq!(quiet_board.mg_value, mg_quiet);
     assert_eq!(quiet_board.eg_value, eg_quiet);
 
-    let cap_move = Move::new(25, 32, BISHOP as u32, KNIGHT as u32 + 1, MoveType::Cap);
+    let cap_move = Move::new(
+        25,
+        32,
+        BISHOP as u32,
+        KING as u32 + 1,
+        crate::movegen::moves::MoveType::Cap,
+    );
     let cap_board = board.copy_make(cap_move);
 
     let mat = gen_mat_value(&cap_board);

@@ -1,5 +1,5 @@
-use crate::moves::Move;
-use crate::tt_entry::{AtomicTTEntry, Entry, EntryType, NoEntry, TTEntry};
+use crate::movegen::moves::Move;
+use crate::search::tt_entry::{AtomicTTEntry, Entry, EntryType, NoEntry, TTEntry};
 use std::cell::Cell;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;

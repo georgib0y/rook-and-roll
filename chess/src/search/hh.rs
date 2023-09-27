@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::tt::ORDER;
+use crate::search::tt::ORDER;
 use std::sync::atomic::AtomicU32;
 
 pub trait HTable {

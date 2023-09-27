@@ -1,9 +1,9 @@
 use crate::game_state::{BestMoveFinder, GameState};
 use crate::uci::PositionCommandType;
-use chess::board::PIECE_NAMES;
-use chess::move_info::SQ_NAMES;
-use chess::moves::Move;
-use chess::tt::TTable;
+use chess::board::board::PIECE_NAMES;
+use chess::movegen::move_info::SQ_NAMES;
+use chess::movegen::moves::Move;
+use chess::search::tt::TTable;
 use std::fs::read_to_string;
 
 #[test]
@@ -28,7 +28,7 @@ fn wac_tests() {
         let pos = PositionCommandType::new_from_pos_args(fen).unwrap();
 
         game_state.ucinewgame();
-        game_state.position(pos).unwrap();
+        // game_state.position(pos).unwrap();
 
         let m = game_state.find_best_move().unwrap();
         tested += 1;

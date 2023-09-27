@@ -16,10 +16,12 @@ chrono = "0.4.22"
 
 [profile.dev]
 debug = 2
-#opt-level = 1
 
 [profile.release]
 lto = true
+
+[profile.test]
+debug = 2
 
 [profile.optimised-tests]
 inherits = "release"

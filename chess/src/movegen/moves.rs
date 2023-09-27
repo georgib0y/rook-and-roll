@@ -10,11 +10,11 @@ movetype 0-12,  4 bits
 ep, last castle state and last halfmove can all be stored in search - aha not with copy move tho
 */
 
-use crate::board::Board;
-use crate::board::PIECE_NAMES;
-use crate::move_info::SQ_NAMES;
-use crate::movegen::{get_piece, get_xpiece, CAP_SCORE_OFFSET};
-use crate::search::MAX_DEPTH;
+use crate::board::board::Board;
+use crate::board::board::PIECE_NAMES;
+use crate::movegen::move_info::SQ_NAMES;
+use crate::movegen::movegen::{get_piece, get_xpiece, CAP_SCORE_OFFSET};
+use crate::search::searchers::MAX_DEPTH;
 use std::fmt::{Display, Formatter};
 
 const PREV_MOVE_SIZE: usize = 16384;
@@ -101,32 +101,36 @@ pub struct Move(u32);
 
 impl Move {
     #[inline]
-    pub fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: MoveType) -> Move {
+    pub const fn new(from: u32, to: u32, piece: u32, xpiece: u32, move_type: MoveType) -> Move {
         //dbg!(from, to, piece, xpiece, move_type);
         Move(from << 18 | to << 12 | piece << 8 | xpiece << 4 | move_type as u32)
     }
 
-    pub fn _new_from_u32(m: u32) -> Move {
+    pub const fn empty() -> Move {
+        Move(0)
+    }
+
+    pub const fn _new_from_u32(m: u32) -> Move {
         Move(m)
     }
 
     #[inline]
-    pub fn from(&self) -> u32 {
+    pub const fn from(&self) -> u32 {
         self.0 >> 18
     }
 
     #[inline]
-    pub fn to(&self) -> u32 {
+    pub const fn to(&self) -> u32 {
         (self.0 >> 12) & 0x3F
     }
 
     #[inline]
-    pub fn piece(&self) -> u32 {
+    pub const fn piece(&self) -> u32 {
         (self.0 >> 8) & 0xF
     }
 
     #[inline]
-    pub fn xpiece(&self) -> u32 {
+    pub const fn xpiece(&self) -> u32 {
         (self.0 >> 4) & 0xF
     }
 

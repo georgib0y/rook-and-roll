@@ -1,9 +1,9 @@
-use crate::board::{Board, KING, PAWN};
-use crate::eval::{eval, CHECKMATE, MATED, PIECE_VALUES, STALEMATE};
-use crate::movegen::{is_in_check, is_legal_move, moved_into_check, MoveList, MoveSet};
-use crate::moves::{KillerMoves, Move, MoveType, PrevMoves};
-use crate::tt::{AtomicTTable, TTable, ORDER, TT};
-use crate::tt_entry::EntryType::{Alpha, Beta, PV};
+use crate::board::board::{Board, ALL_PIECES, KING, PAWN};
+use crate::movegen::movegen::{is_in_check, is_legal_move, moved_into_check, MoveList, MoveSet};
+use crate::movegen::moves::{KillerMoves, Move, MoveType, PrevMoves};
+use crate::search::eval::{eval, CHECKMATE, MATED, PIECE_VALUES, STALEMATE};
+use crate::search::tt::{AtomicTTable, TTable, ORDER, TT};
+use crate::search::tt_entry::EntryType::{Alpha, Beta, PV};
 use log::info;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -335,7 +335,7 @@ impl<'a, T: TT> Searcher<'a, T> {
             // delta pruning
             if eval + PIECE_VALUES[m.xpiece() as usize] + 200 < alpha
                 && !m.move_type().is_promo()
-                && (b.util[2] ^ b.pieces[0] ^ b.pieces[1]).count_ones() > 4
+                && (b.util[ALL_PIECES] ^ b.pieces[0] ^ b.pieces[1]).count_ones() > 4
             {
                 continue;
             }

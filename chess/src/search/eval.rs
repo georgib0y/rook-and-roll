@@ -1,5 +1,5 @@
-use crate::board::Board;
-use crate::move_info::PST;
+use crate::board::board::Board;
+use crate::movegen::move_info::PST;
 
 pub const CHECKMATE: i32 = -1000000000;
 pub const MATED: i32 = -CHECKMATE;
@@ -119,17 +119,18 @@ pub fn gen_pst_value(board: &Board) -> (i32, i32) {
             while w_piece > 0 {
                 let sq = w_piece.trailing_zeros() as usize;
                 // pos += PST[*w][sq] as i32;
-                mg += PST::mid_pst(*w, sq);
-                eg += PST::end_pst(*w, sq);
+                let (mg_w, eg_w) = PST::pst(*w, sq);
+                mg += mg_w as i32;
+                eg += eg_w as i32;
                 w_piece &= w_piece - 1;
             }
 
             let mut b_piece = board.pieces[*b];
             while b_piece > 0 {
                 let sq = b_piece.trailing_zeros() as usize;
-                // pos += PST[*b][sq] as i32;
-                mg += PST::mid_pst(*b, sq);
-                eg += PST::end_pst(*b, sq);
+                let (mg_b, eg_b) = PST::pst(*b, sq);
+                mg += mg_b as i32;
+                eg += eg_b as i32;
                 b_piece &= b_piece - 1;
             }
         });

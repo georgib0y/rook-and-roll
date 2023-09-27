@@ -1,7 +1,7 @@
-use crate::eval::{CHECKMATE, MATED};
-use crate::moves::{Move, NULL_MOVE};
-use crate::search::MAX_DEPTH;
-use crate::tt::ORDER;
+use crate::search::eval::{CHECKMATE, MATED};
+use crate::movegen::moves::{Move, NULL_MOVE};
+use crate::search::searchers::MAX_DEPTH;
+use crate::search::tt::ORDER;
 use std::cell::Cell;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicU8, AtomicUsize};
 use std::sync::RwLock;
@@ -265,22 +265,22 @@ impl Entry for AtomicTTEntry {
 pub struct NoEntry;
 
 impl Entry for NoEntry {
-    fn get_score(&self, hash: u64, alpha: i32, beta: i32, depth: usize, ply: i32) -> Option<i32> {
+    fn get_score(&self, _hash: u64, _alpha: i32, _beta: i32, _depth: usize, _ply: i32) -> Option<i32> {
         None
     }
 
-    fn get_bestmove(&self, hash: u64) -> Option<Move> {
+    fn get_bestmove(&self, _hash: u64) -> Option<Move> {
         None
     }
 
     fn update_entry(
         &self,
-        hash: u64,
-        score: i32,
-        e_type: EntryType,
-        depth: usize,
-        best: Option<Move>,
-        ply: usize,
+        _hash: u64,
+        _score: i32,
+        _e_type: EntryType,
+        _depth: usize,
+        _best: Option<Move>,
+        _ply: usize,
     ) {
     }
 

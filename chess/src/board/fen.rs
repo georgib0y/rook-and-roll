@@ -1,6 +1,6 @@
-use crate::board::{gen_hash, Board};
-use crate::eval::{gen_mat_value, gen_pst_value};
-use crate::move_info::SQUARES;
+use crate::board::board::{gen_hash, Board};
+use crate::movegen::move_info::SQUARES;
+use crate::search::eval::{gen_mat_value, gen_pst_value};
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -144,7 +144,7 @@ fn halfmove_from_fen(fen: &str) -> Result<Option<usize>, InvalidFenError> {
         return Ok(None);
     };
 
-    let halfmove: usize = halfmove_str
+    let halfmove = halfmove_str
         .parse()
         .map_err(|_| InvalidFenError::new(fen))?;
 

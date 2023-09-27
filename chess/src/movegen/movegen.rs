@@ -1,8 +1,10 @@
-use crate::board::{Board, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK};
-use crate::eval::PIECE_VALUES;
-use crate::move_info::{FA, FH, R2, R7, SQUARES};
-use crate::move_tables::MT;
-use crate::moves::{KillerMoves, Move, MoveType, PrevMoves};
+use crate::board::board::{
+    Board, ALL_PIECES, BISHOP, BLACK, KING, KNIGHT, PAWN, QUEEN, ROOK, WHITE,
+};
+use crate::movegen::move_info::{FA, FH, R2, R7, SQUARES};
+use crate::movegen::move_tables::MT;
+use crate::movegen::moves::{KillerMoves, Move, MoveType, PrevMoves};
+use crate::search::eval::PIECE_VALUES;
 use std::cmp::max;
 
 pub const ALL_SQUARES: u64 = u64::MAX;
@@ -181,9 +183,9 @@ impl<'a> MoveList<'a> {
     // target: all the squares that the pawns could move to
     fn white_pawn_quiet(&mut self, pinned: u64, target: u64) -> &mut MoveList<'a> {
         let pawns = self.board.pieces[0] & !pinned;
-        let occ = self.board.util[2] | !target;
+        let occ = self.board.util[ALL_PIECES] | !target;
         let push = pawns & !(occ >> 8);
-        let double = (pawns & R2) & !(occ >> 16) & !(self.board.util[2] >> 8);
+        let double = (pawns & R2) & !(occ >> 16) & !(self.board.util[ALL_PIECES] >> 8);
 
         self.add_pawn_quiet(push & !R7, 8, MoveType::Quiet)
             .add_pawn_quiet(double, 16, MoveType::Double)
@@ -192,7 +194,7 @@ impl<'a> MoveList<'a> {
 
     fn white_pawn_attack(&mut self, pinned: u64, target: u64) -> &mut MoveList<'a> {
         let pawns = self.board.pieces[0] & !pinned;
-        let opp = self.board.util[1] & target;
+        let opp = self.board.util[BLACK] & target;
         let up_lefts = (pawns & !FA) & (opp >> 7);
         let up_rights = (pawns & !FH) & (opp >> 9);
 
@@ -215,9 +217,9 @@ impl<'a> MoveList<'a> {
 
     fn black_pawn_quiet(&mut self, pinned: u64, target: u64) -> &mut MoveList<'a> {
         let pawns = self.board.pieces[1] & !pinned;
-        let occ = self.board.util[2] | !target;
+        let occ = self.board.util[ALL_PIECES] | !target;
         let push = pawns & !(occ << 8);
-        let double = (pawns & R7) & !(occ << 16) & !(self.board.util[2] << 8);
+        let double = (pawns & R7) & !(occ << 16) & !(self.board.util[ALL_PIECES] << 8);
 
         self.add_pawn_quiet(push & !R2, -8, MoveType::Quiet)
             .add_pawn_quiet(double, -16, MoveType::Double)
@@ -226,7 +228,7 @@ impl<'a> MoveList<'a> {
 
     fn black_pawn_attack(&mut self, pinned: u64, target: u64) -> &mut MoveList<'a> {
         let pawns = self.board.pieces[1] & !pinned;
-        let opp = self.board.util[0] & target;
+        let opp = self.board.util[WHITE] & target;
         let down_rights = (pawns & !FH) & (opp << 7);
         let down_lefts = (pawns & !FA) & (opp << 9);
 
@@ -250,7 +252,7 @@ impl<'a> MoveList<'a> {
         let mut knights = self.board.pieces[piece] & !pinned;
         while knights > 0 {
             let from = knights.trailing_zeros();
-            let quiet = MT::knight_moves(from as usize) & !self.board.util[2] & target;
+            let quiet = MT::knight_moves(from as usize) & !self.board.util[ALL_PIECES] & target;
             self.add_quiet(quiet, from, piece as u32);
             knights &= knights - 1;
         }
@@ -275,8 +277,8 @@ impl<'a> MoveList<'a> {
         let mut rooks = self.board.pieces[piece] & !pinned;
         while rooks > 0 {
             let from = rooks.trailing_zeros();
-            let mut quiet = MT::rook_moves(self.board.util[2], from as usize);
-            quiet &= !self.board.util[2] & target;
+            let mut quiet = MT::rook_moves(self.board.util[ALL_PIECES], from as usize);
+            quiet &= !self.board.util[ALL_PIECES] & target;
             self.add_quiet(quiet, from, piece as u32);
             rooks &= rooks - 1;
         }
@@ -289,7 +291,7 @@ impl<'a> MoveList<'a> {
         let opp = self.board.util[self.board.ctm ^ 1] & target;
         while rooks > 0 {
             let from = rooks.trailing_zeros();
-            let attack = MT::rook_moves(self.board.util[2], from as usize) & opp;
+            let attack = MT::rook_moves(self.board.util[ALL_PIECES], from as usize) & opp;
             self.add_attack(attack, from, piece as u32);
             rooks &= rooks - 1;
         }
@@ -301,8 +303,8 @@ impl<'a> MoveList<'a> {
         let mut bishops = self.board.pieces[piece] & !pinned;
         while bishops > 0 {
             let from = bishops.trailing_zeros();
-            let mut quiet = MT::bishop_moves(self.board.util[2], from as usize);
-            quiet &= !self.board.util[2] & target;
+            let mut quiet = MT::bishop_moves(self.board.util[ALL_PIECES], from as usize);
+            quiet &= !self.board.util[ALL_PIECES] & target;
             self.add_quiet(quiet, from, piece as u32);
             bishops &= bishops - 1;
         }
@@ -315,7 +317,7 @@ impl<'a> MoveList<'a> {
         let opp = self.board.util[self.board.ctm ^ 1] & target;
         while bishops > 0 {
             let from = bishops.trailing_zeros();
-            let attack = MT::bishop_moves(self.board.util[2], from as usize) & opp;
+            let attack = MT::bishop_moves(self.board.util[ALL_PIECES], from as usize) & opp;
             self.add_attack(attack, from, piece as u32);
             bishops &= bishops - 1;
         }
@@ -327,9 +329,9 @@ impl<'a> MoveList<'a> {
         let mut queens = self.board.pieces[piece] & !pinned;
         while queens > 0 {
             let from = queens.trailing_zeros();
-            let mut quiet = MT::bishop_moves(self.board.util[2], from as usize);
-            quiet |= MT::rook_moves(self.board.util[2], from as usize);
-            quiet &= !self.board.util[2] & target;
+            let mut quiet = MT::bishop_moves(self.board.util[ALL_PIECES], from as usize);
+            quiet |= MT::rook_moves(self.board.util[ALL_PIECES], from as usize);
+            quiet &= !self.board.util[ALL_PIECES] & target;
 
             self.add_quiet(quiet, from, piece as u32);
             queens &= queens - 1;
@@ -343,8 +345,8 @@ impl<'a> MoveList<'a> {
         let opp = self.board.util[self.board.ctm ^ 1] & target;
         while queens > 0 {
             let from = queens.trailing_zeros();
-            let mut attack = MT::bishop_moves(self.board.util[2], from as usize);
-            attack |= MT::rook_moves(self.board.util[2], from as usize);
+            let mut attack = MT::bishop_moves(self.board.util[ALL_PIECES], from as usize);
+            attack |= MT::rook_moves(self.board.util[ALL_PIECES], from as usize);
             attack &= opp;
             self.add_attack(attack, from, piece as u32);
             queens &= queens - 1;
@@ -355,7 +357,7 @@ impl<'a> MoveList<'a> {
     fn king_quiet(&mut self) -> &mut MoveList<'a> {
         let piece = 10 + self.board.ctm;
         let from = self.board.pieces[piece].trailing_zeros();
-        let quiet = MT::king_moves(from as usize) & !self.board.util[2];
+        let quiet = MT::king_moves(from as usize) & !self.board.util[ALL_PIECES];
         self.add_quiet(quiet, from, piece as u32)
     }
 
@@ -373,12 +375,12 @@ impl<'a> MoveList<'a> {
         let kingside = rights & 0b10;
         let queenside = rights & 1;
 
-        if kingside > 0 && self.board.util[2] & (0x60 << (self.board.ctm * 56)) == 0 {
+        if kingside > 0 && self.board.util[ALL_PIECES] & (0x60 << (self.board.ctm * 56)) == 0 {
             let move_type = MoveType::kingside(self.board.ctm);
             self.add_move(Move::new(from, from + 2, piece as u32, 0, move_type))
         }
 
-        if queenside > 0 && self.board.util[2] & (0xE << (self.board.ctm * 56)) == 0 {
+        if queenside > 0 && self.board.util[ALL_PIECES] & (0xE << (self.board.ctm * 56)) == 0 {
             let move_type = MoveType::queenside(self.board.ctm);
             self.add_move(Move::new(from, from - 2, piece as u32, 0, move_type))
         }
@@ -387,7 +389,7 @@ impl<'a> MoveList<'a> {
 
     fn king_in_check(&mut self) -> &mut MoveList<'a> {
         let from = self.board.pieces[KING + self.board.ctm].trailing_zeros();
-        let occ = self.board.util[2] & !self.board.pieces[KING + self.board.ctm];
+        let occ = self.board.util[ALL_PIECES] & !self.board.pieces[KING + self.board.ctm];
 
         let mut possible = MT::king_moves(from as usize) & !self.board.util[self.board.ctm];
         let opp_colour = self.board.ctm ^ 1;
@@ -402,7 +404,7 @@ impl<'a> MoveList<'a> {
             !(MT::king_moves(self.board.pieces[KING + opp_colour].trailing_zeros() as usize));
 
         // get opp knight moves
-        let mut knights = self.board.pieces[KNIGHT + opp_colour];
+        let mut knights = self.board.pieces[KING + opp_colour];
         while knights > 0 {
             possible &= !(MT::knight_moves(knights.trailing_zeros() as usize));
             knights &= knights - 1;
@@ -422,7 +424,7 @@ impl<'a> MoveList<'a> {
             bishop_queen &= bishop_queen - 1
         }
 
-        let quiet = possible & !self.board.util[2];
+        let quiet = possible & !self.board.util[ALL_PIECES];
         let attack = possible & self.board.util[opp_colour];
         let piece = (KING + self.board.ctm) as u32;
         self.add_quiet(quiet, from, piece)
@@ -450,7 +452,7 @@ impl<'a> MoveList<'a> {
         while pawns > 0 {
             let from = pawns.trailing_zeros();
             let to = (from as i32 + to_diff) as u32;
-            for xpiece in [QUEEN as u32, KNIGHT as u32, ROOK as u32, BISHOP as u32] {
+            for xpiece in [QUEEN as u32, KING as u32, ROOK as u32, BISHOP as u32] {
                 self.add_move(Move::new(from, to, piece, xpiece + piece, MoveType::Promo));
             }
             pawns &= pawns - 1;
@@ -515,7 +517,7 @@ impl<'a> MoveList<'a> {
         let pawns = self.board.pieces[PAWN + colour_to_move];
         attackers |= MT::pawn_attacks(colour_to_move ^ 1, sq) & pawns;
 
-        let knights = self.board.pieces[KNIGHT + colour_to_move];
+        let knights = self.board.pieces[KING + colour_to_move];
         attackers |= MT::knight_moves(sq) & knights;
 
         let king = self.board.pieces[KING + colour_to_move];
@@ -523,11 +525,11 @@ impl<'a> MoveList<'a> {
 
         let bishop_queen =
             self.board.pieces[QUEEN + colour_to_move] | self.board.pieces[BISHOP + colour_to_move];
-        attackers |= MT::bishop_moves(self.board.util[2], sq) & bishop_queen;
+        attackers |= MT::bishop_moves(self.board.util[ALL_PIECES], sq) & bishop_queen;
 
         let rook_queen =
             self.board.pieces[ROOK + colour_to_move] | self.board.pieces[QUEEN + colour_to_move];
-        attackers |= MT::rook_moves(self.board.util[2], sq) & rook_queen;
+        attackers |= MT::rook_moves(self.board.util[ALL_PIECES], sq) & rook_queen;
 
         attackers
     }
@@ -537,21 +539,28 @@ impl<'a> MoveList<'a> {
 
         let mut rq = self.board.pieces[ROOK + (self.board.ctm ^ 1)];
         rq |= self.board.pieces[QUEEN + (self.board.ctm ^ 1)];
-        let rq_pinners =
-            rq & MT::rook_xray_moves(self.board.util[2], self.board.util[self.board.ctm], ksq);
+        let rq_pinners = rq
+            & MT::rook_xray_moves(
+                self.board.util[ALL_PIECES],
+                self.board.util[self.board.ctm],
+                ksq,
+            );
 
         let mut bq = self.board.pieces[BISHOP + (self.board.ctm ^ 1)];
         bq |= self.board.pieces[QUEEN + (self.board.ctm ^ 1)];
-        let bq_pinners =
-            bq & MT::bishop_xray_moves(self.board.util[2], self.board.util[self.board.ctm], ksq);
+        let bq_pinners = bq
+            & MT::bishop_xray_moves(
+                self.board.util[ALL_PIECES],
+                self.board.util[self.board.ctm],
+                ksq,
+            );
 
         let mut pinners = rq_pinners | bq_pinners;
         let mut pinned_pieces = 0;
 
         while pinners > 0 {
             let p_sq = pinners.trailing_zeros() as usize;
-            pinned_pieces |= self.board.util[2] & self.get_ray_inbetween(ksq, p_sq);
-            pinned_pieces |= self.board.util[2] & self.get_ray_inbetween(ksq, p_sq);
+            pinned_pieces |= self.board.util[ALL_PIECES] & self.get_ray_inbetween(ksq, p_sq);
             pinners &= pinners - 1;
         }
 
@@ -651,17 +660,22 @@ pub fn get_all_attackers(board: &Board, sq: usize) -> u64 {
     get_attackers(board, sq, 0) | get_attackers(board, sq, 1)
 }
 
-fn get_attackers(board: &Board, sq: usize, attacker_colour: usize) -> u64 {
-    let mut attackers =
-        MT::pawn_attacks(attacker_colour ^ 1, sq) & board.pieces[PAWN + attacker_colour];
-    attackers |= MT::knight_moves(sq) & board.pieces[KNIGHT + attacker_colour];
-    attackers |= MT::king_moves(sq) & board.pieces[KING + attacker_colour];
-    let mut bq = MT::bishop_moves(board.util[2], sq);
-    bq &= board.pieces[BISHOP + attacker_colour] | board.pieces[QUEEN + attacker_colour];
-    attackers |= bq;
-    let mut rq = MT::rook_moves(board.util[2], sq);
-    rq &= board.pieces[ROOK + attacker_colour] | board.pieces[QUEEN + attacker_colour];
-    attackers |= rq;
+pub fn get_attackers(b: &Board, sq: usize, attacker_colour: usize) -> u64 {
+    let mut attackers = 0;
+    let pawns = b.pieces[PAWN + attacker_colour];
+    attackers |= MT::pawn_attacks(attacker_colour ^ 1, sq) & pawns;
+
+    let knights = b.pieces[KNIGHT + attacker_colour];
+    attackers |= MT::knight_moves(sq) & knights;
+
+    let king = b.pieces[KING + attacker_colour];
+    attackers |= MT::king_moves(sq) & king;
+
+    let bishop_queen = b.pieces[QUEEN + attacker_colour] | b.pieces[BISHOP + attacker_colour];
+    attackers |= MT::bishop_moves(b.util[ALL_PIECES], sq) & bishop_queen;
+
+    let rook_queen = b.pieces[ROOK + attacker_colour] | b.pieces[QUEEN + attacker_colour];
+    attackers |= MT::rook_moves(b.util[ALL_PIECES], sq) & rook_queen;
 
     attackers
 }
@@ -669,7 +683,10 @@ fn get_attackers(board: &Board, sq: usize, attacker_colour: usize) -> u64 {
 #[inline]
 pub fn moved_into_check(board: &Board, m: Move) -> bool {
     let ksq = board.pieces[KING + (board.ctm ^ 1)].trailing_zeros() as usize;
-    SQUARES[m.from() as usize] & MT::superrays(ksq) > 0 && sq_attacked(board, ksq, board.ctm)
+    let from_sq = SQUARES[m.from() as usize];
+    let superray = MT::superrays(ksq);
+    let is_in_ray = from_sq & superray > 0;
+    is_in_ray && sq_attacked(board, ksq, board.ctm)
 }
 
 pub fn is_in_check(board: &Board) -> bool {
@@ -758,12 +775,12 @@ fn see(board: &Board, m: Move, board_depth: usize) -> i32 {
 
     // froms is a bb of the next possible piece to move that attacks the to square
     let mut from_piece = SQUARES[from];
-    let mut occ = board.util[2];
+    let mut occ = board.util[ALL_PIECES];
     let mut attackers = get_all_attackers(board, to);
 
     // can_xray is just all pieces that arent knights
     // as there is no sliding piece that can be behind a knight that could attack the target
-    let can_xray = occ ^ board.pieces[KNIGHT] ^ board.pieces[KNIGHT + 1];
+    let can_xray = occ ^ board.pieces[KING] ^ board.pieces[KING + 1];
 
     gain[depth] = PIECE_VALUES[xpiece];
     while from_piece > 0 {

@@ -1,20 +1,10 @@
-use move_tables::MT;
-use zorbist::Zorb;
+use crate::board::zorbist::Zorb;
+use crate::movegen::move_tables::MT;
 
 pub mod board;
-mod next_board_builder;
-mod eval;
-pub mod fen;
-pub mod lazy_smp;
-pub mod move_info;
-mod move_tables;
-mod movegen;
-pub mod moves;
-mod perft;
+pub mod movegen;
+pub mod perft;
 pub mod search;
-pub mod tt;
-mod tt_entry;
-mod zorbist;
 
 pub fn init() {
     Zorb::init();
@@ -23,11 +13,9 @@ pub fn init() {
 
 #[cfg(test)]
 mod perft_tests {
+    use crate::board::board::Board;
+    use crate::perft::Perft;
     use std::time::Instant;
-
-    use board::Board;
-
-    use crate::{board, perft::Perft};
 
     #[test]
     fn perft() {

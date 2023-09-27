@@ -1,11 +1,11 @@
 use crate::uci::UciCommand::*;
 use crate::uci::UciCommand::{Go, Position};
 use crate::uci::{PositionCommandType, UciCommand};
-use chess::board::Board;
-use chess::lazy_smp::lazy_smp;
-use chess::moves::{Move, PrevMoves, NULL_MOVE};
-use chess::search::iterative_deepening;
-use chess::tt::{AtomicTTable, TTable, TT};
+use chess::board::board::Board;
+use chess::movegen::moves::{Move, PrevMoves, NULL_MOVE};
+use chess::search::lazy_smp::lazy_smp;
+use chess::search::searchers::iterative_deepening;
+use chess::search::tt::{AtomicTTable, TTable, TT};
 use log::info;
 use std::io;
 use std::sync::Arc;
