@@ -1,12 +1,13 @@
-use crate::board::board::Board;
+use crate::board::board::{Board, BLACK, WHITE};
 use crate::movegen::move_info::PST;
+use std::cmp::max;
 
 pub const CHECKMATE: i32 = -1000000000;
 pub const MATED: i32 = -CHECKMATE;
 
 pub const STALEMATE: i32 = 0;
 
-const PAWN_VALUE: i32 = 100;
+pub const PAWN_VALUE: i32 = 100;
 const KNIGHT_VALUE: i32 = 325;
 const ROOK_VALUE: i32 = 500;
 const BISHOP_VALUE: i32 = 325;
@@ -52,111 +53,95 @@ const PIECE_PHASE_VAL: [i32; 12] = [0, 0, 1, 1, 1, 1, 2, 2, 4, 4, 0, 0];
 
 // TODO incremental update of game phase
 pub fn eval(board: &Board, colour_mul: i32) -> i32 {
-    // let mat = gen_mat_value(board);
-    // let (mg_pst, eg_pst) = gen_pst_value(board);
-    // assert_eq!(board.mg_value, mat+mg_pst);
-    // assert_eq!(board.eg_value, mat+eg_pst);
+    let mg_phase = max(
+        24,
+        board
+            .pieces_iter()
+            .enumerate()
+            .skip(2)
+            .take(8)
+            .fold(0, |mg_phase, (p, pieces)| {
+                mg_phase + PIECE_PHASE_VAL[p] * pieces.count_ones() as i32
+            }),
+    );
 
-    let mut mg_phase = 0;
-    for (p, pieces) in board.pieces.iter().enumerate().skip(2).take(8) {
-        mg_phase += PIECE_PHASE_VAL[p] * pieces.count_ones() as i32;
-    }
-
-    if mg_phase > 24 {
-        mg_phase = 24
-    }
     let eg_phase = 24 - mg_phase;
 
-    let eval = (board.mg_value * mg_phase + board.eg_value * eg_phase) / 24;
-
-    // if board.is_endgame() {
-    //     // adjust king pst to endgame pst
-    //     let ksq = board.pieces[KING+board.colour_to_move].trailing_zeros() as usize;
-    //     eval += (-PST[KING+board.colour_to_move][ksq] + -PST[KING+board.colour_to_move+2][ksq]) as i32
-    // }
-
-    // bishop pair bonus
-    // if board.pieces[BISHOP + board.colour_to_move].count_ones() == 2 {
-    //     eval += BISHOP_PAIR_BONUS;
-    // }
-    // // // rook pair pen (redundancy)
-    // if board.pieces[ROOK + board.colour_to_move].count_ones() == 2 {
-    //     eval += ROOK_PAIR_PEN;
-    // }
-    // // knight pair pen (worse than other minor piece pairs)
-    // if board.pieces[KNIGHT + board.colour_to_move].count_ones() == 2 {
-    //     eval += KNIGHT_PAIR_PEN;
-    // }
-    //
-    // no pawn penalty
-    // if board.pieces[board.colour_to_move].count_ones() == 0 {
-    //     eval += NO_PAWNS_PEN;
-    // }
+    let eval = (board.mg_value() * mg_phase + board.eg_value() * eg_phase) / 24;
 
     eval * colour_mul
 }
 
-#[test]
-fn iterator_funny_buiz() {
-    let range: Vec<(i32, i32)> = (0..12).step_by(2).zip((1..12).step_by(2)).collect();
+pub fn gen_board_value(board: &Board) -> (i32, i32) {
+    let values = |colour| {
+        board
+            .pieces_iter()
+            .map(|p| *p)
+            .enumerate()
+            .skip(colour)
+            .step_by(2)
+            .fold((0, 0), |values, (piece, mut pieces)| {
+                let mut p_mg = 0;
+                let mut p_eg = 0;
+                while pieces > 0 {
+                    let sq = pieces.trailing_zeros() as usize;
+                    let (mg, eg) = PST::pst(piece, sq);
 
-    let arr: Vec<(i32, i32)> = vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11)];
+                    p_mg += mg as i32 + MAT_SCORES[piece];
+                    p_eg += eg as i32 + MAT_SCORES[piece];
+                    pieces &= pieces - 1;
+                }
 
-    assert_eq!(range, arr);
+                (values.0 + p_mg, values.1 + p_eg)
+            })
+    };
+
+    let (white_mg, white_eg) = values(WHITE);
+    let (black_mg, black_eg) = values(BLACK);
+
+    (white_mg + black_mg, white_eg + black_eg)
 }
-
 /// returns (mg, eg) as values
 pub fn gen_pst_value(board: &Board) -> (i32, i32) {
-    let mut mg = 0;
-    let mut eg = 0;
+    let values = |colour| {
+        board
+            .pieces_iter()
+            .map(|p| *p)
+            .enumerate()
+            .skip(colour)
+            .step_by(2)
+            .fold((0, 0), |values, (piece, mut pieces)| {
+                let mut p_mg = 0;
+                let mut p_eg = 0;
+                while pieces > 0 {
+                    let sq = pieces.trailing_zeros() as usize;
+                    let (mg, eg) = PST::pst(piece, sq);
+                    p_mg += mg;
+                    p_eg += eg;
+                    pieces &= pieces - 1;
+                }
 
-    // (0..12).step_by(2).zip((1..12).step_by(2)).for_each(|(w, b)|)
+                (values.0 + p_mg, values.1 + p_eg)
+            })
+    };
 
-    [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11)]
-        .iter()
-        .for_each(|(w, b)| {
-            let mut w_piece = board.pieces[*w];
-            while w_piece > 0 {
-                let sq = w_piece.trailing_zeros() as usize;
-                // pos += PST[*w][sq] as i32;
-                let (mg_w, eg_w) = PST::pst(*w, sq);
-                mg += mg_w as i32;
-                eg += eg_w as i32;
-                w_piece &= w_piece - 1;
-            }
+    let (white_mg, white_eg) = values(WHITE);
+    let (black_mg, black_eg) = values(BLACK);
 
-            let mut b_piece = board.pieces[*b];
-            while b_piece > 0 {
-                let sq = b_piece.trailing_zeros() as usize;
-                let (mg_b, eg_b) = PST::pst(*b, sq);
-                mg += mg_b as i32;
-                eg += eg_b as i32;
-                b_piece &= b_piece - 1;
-            }
-        });
-
-    (mg, eg)
+    ((white_mg + black_mg) as i32, (white_eg + black_eg) as i32)
 }
 
-// r1bqkb1r/ppp2ppp/4pn2/8/Q1nP1B2/2N1PN2/PP3PPP/R3K2R b KQkq - 1 8
-
 pub fn gen_mat_value(b: &Board) -> i32 {
-    let mut mat = 0;
+    // b.pieces_iter()
+    //     .map(|pieces| pieces.count_ones() as i32)
+    //     .enumerate()
+    //     .fold(0, |mat, (piece, count)| mat + MAT_SCORES[piece] * count)
 
-    for piece in (0..10).step_by(2) {
-        mat += b.pieces[piece].count_ones() as i32 * PIECE_VALUES[piece];
-        mat -= b.pieces[piece + 1].count_ones() as i32 * PIECE_VALUES[piece];
+    let mut mat = 0;
+    for p in 0..12 {
+        let count = b.pieces(p).count_ones();
+        mat += MAT_SCORES[p] * count as i32;
     }
 
     mat
 }
-
-// #[test]
-// fn pst_symm() {
-//     for (w, b) in  {
-//         let fwd: Vec<&i8> = w.iter().collect();
-//         let bkw: Vec<&i8> = b.iter().rev().collect();
-//
-//         assert_eq!(fwd, bkw);
-//     }
-// }

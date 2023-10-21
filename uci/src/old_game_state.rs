@@ -1,11 +1,11 @@
 use crate::uci::UciCommand::*;
 use crate::uci::UciCommand::{Go, Position};
-use crate::uci::{PositionCommandType, UciCommand};
+use crate::uci::{UciCommand, UciPositionCommand};
 use chess::board::board::Board;
 use chess::movegen::moves::{Move, PrevMoves, NULL_MOVE};
 use chess::search::lazy_smp::lazy_smp;
+use chess::search::old_tt::{AtomicTTable, TTable, TT};
 use chess::search::searchers::iterative_deepening;
-use chess::search::tt::{AtomicTTable, TTable, TT};
 use log::info;
 use std::io;
 use std::sync::Arc;
@@ -97,12 +97,12 @@ where
         println!("readyok");
     }
 
-    pub fn position(&mut self, position_type: PositionCommandType) {
+    pub fn position(&mut self, position_type: UciPositionCommand) {
         let mut prev_moves = PrevMoves::new();
 
         let board = match position_type {
-            PositionCommandType::Startpos => Board::new(),
-            PositionCommandType::Fen { fen, moves } => {
+            UciPositionCommand::Startpos => Board::new(),
+            UciPositionCommand::Fen { fen, moves } => {
                 let mut board = match Board::new_fen(&fen) {
                     Ok(board) => board,
                     Err(err) => {

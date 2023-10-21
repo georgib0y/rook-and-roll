@@ -6,7 +6,6 @@ edition = "2021"
 [lib]
 path = "src/lib.rs"
 
-
 [dependencies]
 rand = "0.8.5"
 rand_chacha = "0.3.1"

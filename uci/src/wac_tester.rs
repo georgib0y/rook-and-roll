@@ -3,7 +3,7 @@ use crate::uci::PositionCommandType;
 use chess::board::board::PIECE_NAMES;
 use chess::movegen::move_info::SQ_NAMES;
 use chess::movegen::moves::Move;
-use chess::search::tt::TTable;
+use chess::search::old_tt::TTable;
 use std::fs::read_to_string;
 
 #[test]

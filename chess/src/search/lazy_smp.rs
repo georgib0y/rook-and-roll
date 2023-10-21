@@ -1,9 +1,9 @@
 use crate::board::board::{Board, PAWN};
 use crate::movegen::moves::{Move, PrevMoves};
+use crate::search::old_tt::{AtomicTTable, ORDER};
 use crate::search::searchers::{AbortFlag, Searcher, MAX_DEPTH, MAX_TIME, MIN_SCORE};
-use crate::search::tt::{AtomicTTable, ORDER};
 use log::info;
-use std::sync::atomic::{AtomicUsize};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::thread;
 use std::thread::{Scope, ScopedJoinHandle};

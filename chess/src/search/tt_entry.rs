@@ -1,5 +1,5 @@
-use crate::search::eval::{CHECKMATE, MATED};
 use crate::movegen::moves::{Move, NULL_MOVE};
+use crate::search::eval::{CHECKMATE, MATED};
 use crate::search::searchers::MAX_DEPTH;
 use crate::search::tt::ORDER;
 use std::cell::Cell;
@@ -265,7 +265,14 @@ impl Entry for AtomicTTEntry {
 pub struct NoEntry;
 
 impl Entry for NoEntry {
-    fn get_score(&self, _hash: u64, _alpha: i32, _beta: i32, _depth: usize, _ply: i32) -> Option<i32> {
+    fn get_score(
+        &self,
+        _hash: u64,
+        _alpha: i32,
+        _beta: i32,
+        _depth: usize,
+        _ply: i32,
+    ) -> Option<i32> {
         None
     }
 

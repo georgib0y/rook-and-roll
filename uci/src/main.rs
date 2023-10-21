@@ -1,16 +1,22 @@
-use crate::game_state::GameState;
+// use crate::game_state::GameState;
+use crate::game_state::game_state_mt::GameStateMT;
+use crate::game_state::game_state_st::GameStateST;
+use crate::uci::{Uci, UciWriter};
 use chess::board::board::Board;
+use chess::movegen::moves::{Move, PrevMoves};
 use chess::perft::Perft;
-use chess::search::tt::{AtomicTTable, TTable};
+use chess::search::search::single_searcher::iterative_deepening;
+use chess::search::tt::tt::TTable;
 use std::env::args;
-use std::sync::Arc;
+use std::fs::File;
 use std::time::Instant;
 
+// mod game_state;
 mod game_state;
 pub mod uci;
-mod wac_tester;
 
-const PERFT: bool = true;
+const SEARCH: bool = false;
+const PERFT: bool = false;
 
 fn main() {
     chess::init();
@@ -20,25 +26,30 @@ fn main() {
         return;
     }
 
+    // let m = Move::_new_from_u32(14610688);
+    // println!("{m}");
+    // return;
+
+    if SEARCH {
+        _do_search();
+        return;
+    }
+
     if PERFT {
         _do_perft();
         return;
     }
 
-    let author = "George";
-    let bot_name = "rustinator";
-    let num_threads = 1;
+    let mut uci = Uci::new(GameStateST::new());
+    // let mut uci = Uci::new(GameStateMT::new(4));
 
-    if num_threads == 1 {
-        GameState::<TTable>::new_single_thread(author, bot_name).start()
-    } else {
-        GameState::<Arc<AtomicTTable>>::new_multi_threaded(author, bot_name, num_threads).start()
-    };
+    uci.start();
 }
 
 fn _do_perft() {
     let b = Board::new();
-    // let b = Board::new_fen("rnbq1bnr/ppppkppp/4pB2/8/8/1P6/P1PPPPPP/RN1QKBNR b KQ - 3 3").unwrap();
+    // let b = Board::new_fen("r3k2r/p1ppqpb1/1n2pnp1/1b1PN3/1p2P3/2N2Q2/PPPBBPpP/R4R1K w kq - 0 3")
+    //     .unwrap();
 
     let depth = 6;
     let start = Instant::now();
@@ -52,6 +63,14 @@ fn _do_perft() {
         perft.mc,
         stop.as_millis()
     );
+}
+
+fn _do_search() {
+    let b = Board::new();
+    let mut tt = TTable::new();
+    let mut prev_moves = PrevMoves::new();
+    let mut out = UciWriter::new();
+    iterative_deepening(&b, &mut tt, &mut prev_moves, &mut out).unwrap();
 }
 
 fn do_perftree() {

@@ -1,9 +1,9 @@
-use crate::board::board_copier::{BoardCopier, BoardCopierWithHash, BoardCopierWithoutHash};
+use crate::board::board_copier::{BoardCopier, BoardCopierWithHash};
 use crate::board::zorbist::Zorb;
 use crate::movegen::move_info::SQUARES;
 use crate::movegen::movegen::{get_piece, get_xpiece};
 use crate::movegen::moves::Move;
-use crate::search::eval::{gen_mat_value, gen_pst_value};
+use crate::search::eval::{gen_board_value, gen_mat_value, gen_pst_value};
 use std::marker::PhantomData;
 use std::{fmt, num};
 
@@ -66,15 +66,15 @@ type Copier = BoardCopierWithHash;
 // 0 - white to move, 1 - black to move
 #[derive(Copy, Clone)]
 pub struct Board {
-    pub pieces: [u64; 12],
-    pub util: [u64; 3],
-    pub ctm: usize,
-    pub castle_state: u8,
-    pub ep: usize,
-    pub halfmove: usize,
-    pub hash: u64,
-    pub mg_value: i32,
-    pub eg_value: i32,
+    pub(super) pieces: [u64; 12],
+    pub(super) util: [u64; 3],
+    pub(super) ctm: u8,
+    pub(super) castle_state: u8,
+    pub(super) ep: u8,
+    pub(super) halfmove: u16,
+    pub(super) hash: u64,
+    pub(super) mg_value: i32,
+    pub(super) eg_value: i32,
 }
 
 impl Board {
@@ -82,7 +82,7 @@ impl Board {
         let mut board: Board = Board {
             pieces: DEFAULT_PIECES,
             util: DEFAULT_UTIL,
-            ctm: WHITE,
+            ctm: WHITE as u8,
             castle_state: 0b1111,
             ep: 64,
             halfmove: 0,
@@ -92,12 +92,25 @@ impl Board {
         };
 
         board.hash = gen_hash(board);
-        let mat = gen_mat_value(&board);
-        let (mg, eg) = gen_pst_value(&board);
-        board.mg_value = mat + mg;
-        board.eg_value = mat + eg;
+
+        (board.mg_value, board.eg_value) = gen_board_value(&board);
 
         board
+    }
+
+    #[inline]
+    pub fn ctm(&self) -> usize {
+        self.ctm as usize
+    }
+
+    #[inline]
+    pub fn opp_ctm(&self) -> usize {
+        self.ctm as usize ^ 1
+    }
+
+    #[inline]
+    pub fn pieces_iter(&self) -> impl Iterator<Item = &u64> {
+        self.pieces.iter()
     }
 
     #[inline]
@@ -148,6 +161,36 @@ impl Board {
     #[inline]
     pub fn all_occ(&self) -> u64 {
         self.util[ALL_PIECES]
+    }
+
+    #[inline]
+    pub fn ep(&self) -> usize {
+        self.ep as usize
+    }
+
+    #[inline]
+    pub fn castle_state(&self) -> u8 {
+        self.castle_state
+    }
+
+    #[inline]
+    pub fn hash(&self) -> u64 {
+        self.hash
+    }
+
+    #[inline]
+    pub fn halfmove(&self) -> usize {
+        self.halfmove as usize
+    }
+
+    #[inline]
+    pub fn mg_value(&self) -> i32 {
+        self.mg_value
+    }
+
+    #[inline]
+    pub fn eg_value(&self) -> i32 {
+        self.eg_value
     }
 
     pub fn copy_make(&self, m: Move) -> Board {

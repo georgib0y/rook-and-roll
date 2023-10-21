@@ -10,11 +10,11 @@ movetype 0-12,  4 bits
 ep, last castle state and last halfmove can all be stored in search - aha not with copy move tho
 */
 
-use crate::board::board::Board;
 use crate::board::board::PIECE_NAMES;
+use crate::board::board::{Board, WHITE};
 use crate::movegen::move_info::SQ_NAMES;
 use crate::movegen::movegen::{get_piece, get_xpiece, CAP_SCORE_OFFSET};
-use crate::search::searchers::MAX_DEPTH;
+use crate::search::search::MAX_DEPTH;
 use std::fmt::{Display, Formatter};
 
 const PREV_MOVE_SIZE: usize = 16384;
@@ -156,7 +156,7 @@ impl Move {
         let to = sq_from_text(&text[2..4]) as u32;
 
         let promo = if text.len() == 5 {
-            Some(promo_piece_from_text(&text[4..]) + b.ctm)
+            Some(promo_piece_from_text(&text[4..]) + b.ctm())
         } else {
             None
         };
@@ -174,13 +174,13 @@ impl Move {
             move_type = MoveType::Double;
         } else if (piece == 10 || piece == 11) && from.abs_diff(to) == 2 {
             if from < to {
-                move_type = if b.ctm == 0 {
+                move_type = if b.ctm() == WHITE {
                     MoveType::WKingSide
                 } else {
                     MoveType::BKingSide
                 };
             } else if from > to {
-                move_type = if b.ctm == 0 {
+                move_type = if b.ctm() == WHITE {
                     MoveType::WQueenSide
                 } else {
                     MoveType::BQueenSide
@@ -200,7 +200,7 @@ impl Move {
         } else if promo_piece < 12 {
             move_type = MoveType::Promo;
             xpiece = promo_piece;
-        } else if piece < 2 && to == b.ep as u32 {
+        } else if piece < 2 && to == b.ep() as u32 {
             move_type = MoveType::Ep;
         } else if xpiece < 12 {
             move_type = MoveType::Cap;
@@ -216,15 +216,16 @@ impl Move {
 
         mv.push_str(SQ_NAMES[f]);
         mv.push_str(SQ_NAMES[t]);
-        if m as u32 > 6 && (m as u32) < 12 {
-            let promo_piece = if m == MoveType::Promo {
-                x as u32
-            } else {
-                (m as u32) - 6
-            };
 
-            mv.push_str(&text_from_promo_piece(promo_piece));
-        }
+        mv.push_str(&match m {
+            MoveType::Promo => text_from_promo_piece(x as u32),
+            MoveType::NPromoCap => "n".to_string(),
+            MoveType::RPromoCap => "r".to_string(),
+            MoveType::BPromoCap => "b".to_string(),
+            MoveType::QPromoCap => "q".to_string(),
+            _ => "".to_string(),
+        });
+
         mv
     }
 }
@@ -238,6 +239,12 @@ impl Display for Move {
             "From: {} ({})\tTo:{} ({})\tPiece: {} ({})\tXPiece: {} ({})\tMove Type: {}",
             fr, SQ_NAMES[fr], t, SQ_NAMES[t], p, PIECE_NAMES[p], x, PIECE_NAMES[x], m
         )
+    }
+}
+
+impl From<Move> for u32 {
+    fn from(value: Move) -> Self {
+        value.0
     }
 }
 
@@ -294,39 +301,43 @@ impl PrevMoves {
 
 #[derive(Clone)]
 pub struct KillerMoves {
-    killer_moves: Vec<(Option<Move>, Option<Move>)>,
+    killer_moves: [[Option<Move>; 2]; MAX_DEPTH],
 }
 
 impl KillerMoves {
     pub fn new() -> KillerMoves {
         KillerMoves {
-            killer_moves: vec![(None, None); MAX_DEPTH],
+            killer_moves: [[None, None]; MAX_DEPTH],
         }
     }
 
     pub fn add(&mut self, m: Move, depth: usize) {
         if let Some(killers) = self.killer_moves.get_mut(depth) {
             // dont add the same move in twice
-            if Some(m) == killers.0 {
+            if Some(m) == killers[0] {
                 return;
             }
 
             // shuffle the killer moves upwards
-            killers.1 = killers.0;
-            killers.0 = Some(m);
+            killers[1] = killers[0];
+            killers[0] = Some(m);
         }
+    }
+
+    pub fn get_kms(&self, depth: usize) -> [Option<Move>; 2] {
+        self.killer_moves[depth]
     }
 
     // returns an option containing an i32 for move scoring or none
     pub fn get_move_score(&self, m: Move, depth: usize) -> Option<i32> {
-        self.killer_moves.get(depth).and_then(|(k1, k2)| {
-            if &Some(m) == k1 {
-                Some(CAP_SCORE_OFFSET + 1)
-            } else if &Some(m) == k2 {
-                Some(CAP_SCORE_OFFSET)
-            } else {
-                None
-            }
-        })
+        let [k1, k2] = self.killer_moves[depth];
+
+        if Some(m) == k1 {
+            Some(CAP_SCORE_OFFSET + 1)
+        } else if Some(m) == k2 {
+            Some(CAP_SCORE_OFFSET)
+        } else {
+            None
+        }
     }
 }

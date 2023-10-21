@@ -1,8 +1,6 @@
 use crate::board::board::Board;
-use crate::board::board2::Board2;
 use crate::movegen::move_list::StackMoveList;
 use crate::movegen::movegen::*;
-use crate::movegen::movegen_iters::movegen_iter::{next_check_moves, next_moves};
 use crate::movegen::moves::{Move, PrevMoves};
 use crate::movegen::piece_gen::{gen_all_moves, gen_check_moves};
 
@@ -26,7 +24,7 @@ impl Perft {
             return;
         }
 
-        let mut ml = StackMoveList::new();
+        let mut ml = StackMoveList::default();
 
         if is_in_check(board) {
             gen_check_moves(board, &mut ml);
@@ -41,7 +39,7 @@ impl Perft {
                 continue;
             }
 
-            // println!("{b}\n{m}");
+            // println!("{b}\n{m}: {}", m.as_uci_string());
 
             self.perft(&b, depth - 1);
         }
@@ -57,7 +55,7 @@ impl Perft {
 
         let mut total = 0;
 
-        let mut ml = StackMoveList::new();
+        let mut ml = StackMoveList::default();
         if is_in_check(&board) {
             gen_check_moves(&board, &mut ml);
         } else {
@@ -83,7 +81,7 @@ impl Perft {
             return 1;
         }
 
-        let mut ml = StackMoveList::new();
+        let mut ml = StackMoveList::default();
         if is_in_check(&board) {
             gen_check_moves(&board, &mut ml);
         } else {

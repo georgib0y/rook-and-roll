@@ -1,26 +1,30 @@
 use crate::board::board::{gen_hash, Board};
 use crate::movegen::move_info::SQUARES;
-use crate::search::eval::{gen_mat_value, gen_pst_value};
+use crate::search::eval::{gen_board_value, gen_mat_value, gen_pst_value};
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug)]
-pub struct InvalidFenError {
-    fen: String,
-}
-
-impl InvalidFenError {
-    pub fn new(fen: &str) -> InvalidFenError {
-        InvalidFenError {
-            fen: fen.to_string(),
-        }
-    }
+pub enum InvalidFenError {
+    InvalidPieces,
+    InvalidCTM,
+    InvalidCastleState,
+    InvalidEpSquare,
+    InvalidHalfmove,
 }
 
 impl Display for InvalidFenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid fen: {}", self.fen)
+        let msg = match self {
+            InvalidFenError::InvalidPieces => "Invalid Pieces",
+            InvalidFenError::InvalidCTM => "Invalid CTM",
+            InvalidFenError::InvalidCastleState => "Invalid Castle state",
+            InvalidFenError::InvalidEpSquare => "Invalid Ep square",
+            InvalidFenError::InvalidHalfmove => "Invalid Halfmove",
+        };
+
+        write!(f, "Invalid fen: {msg}")
     }
 }
 
@@ -54,7 +58,10 @@ fn inc_from_char(name: char) -> Option<usize> {
 }
 
 fn pieces_from_fen(fen: &str) -> Result<[u64; 12], InvalidFenError> {
-    let fen_pieces = fen.split(" ").nth(0).ok_or(InvalidFenError::new(fen))?;
+    let fen_pieces = fen
+        .split(" ")
+        .nth(0)
+        .ok_or(InvalidFenError::InvalidPieces)?;
 
     let mut pieces = [0; 12];
 
@@ -72,7 +79,7 @@ fn pieces_from_fen(fen: &str) -> Result<[u64; 12], InvalidFenError> {
                     pieces[piece] ^= SQUARES[idx];
                 }
 
-                idx += inc_from_char(sq).ok_or(InvalidFenError::new(fen))?;
+                idx += inc_from_char(sq).ok_or(InvalidFenError::InvalidPieces)?;
                 Ok(())
             })
         })?;
@@ -80,18 +87,21 @@ fn pieces_from_fen(fen: &str) -> Result<[u64; 12], InvalidFenError> {
     Ok(pieces)
 }
 
-fn ctm_from_fen(fen: &str) -> Result<usize, InvalidFenError> {
-    let ctm = fen.split(" ").nth(1).ok_or(InvalidFenError::new(fen))?;
+fn ctm_from_fen(fen: &str) -> Result<u8, InvalidFenError> {
+    let ctm = fen.split(" ").nth(1).ok_or(InvalidFenError::InvalidCTM)?;
 
     match ctm {
         "w" => Ok(0),
         "b" => Ok(1),
-        _ => Err(InvalidFenError::new(fen)),
+        _ => Err(InvalidFenError::InvalidCTM),
     }
 }
 
 fn castle_state_from_fen(fen: &str) -> Result<u8, InvalidFenError> {
-    let castle_state_str = fen.split(" ").nth(2).ok_or(InvalidFenError::new(fen))?;
+    let castle_state_str = fen
+        .split(" ")
+        .nth(2)
+        .ok_or(InvalidFenError::InvalidCastleState)?;
 
     match castle_state_str {
         "KQkq" => Ok(0b1111),
@@ -110,45 +120,54 @@ fn castle_state_from_fen(fen: &str) -> Result<u8, InvalidFenError> {
         "k" => Ok(0b0010),
         "q" => Ok(0b0001),
         "-" => Ok(0b0000),
-        _ => Err(InvalidFenError::new(fen)),
+        _ => Err(InvalidFenError::InvalidCastleState),
     }
 }
 
-fn ep_sq_from_fen(fen: &str) -> Result<usize, InvalidFenError> {
-    let ep_sq = fen.split(" ").nth(3).ok_or(InvalidFenError::new(fen))?;
+fn ep_sq_from_fen(fen: &str) -> Result<u8, InvalidFenError> {
+    let ep_sq = fen
+        .split(" ")
+        .nth(3)
+        .ok_or(InvalidFenError::InvalidEpSquare)?;
 
     if ep_sq.contains('-') {
         return Ok(64);
     }
 
     // convert file letter to 0-7 value
-    let file_char = ep_sq.chars().nth(0).ok_or(InvalidFenError::new(fen))?;
+    let file_char = ep_sq
+        .chars()
+        .nth(0)
+        .ok_or(InvalidFenError::InvalidEpSquare)?;
     if file_char < 'a' || file_char > 'h' {
-        return Err(InvalidFenError::new(fen));
+        return Err(InvalidFenError::InvalidEpSquare);
     }
 
     let file = file_char as usize - 'a' as usize;
 
     // convert rank to 0-7 value
-    let rank_char = ep_sq.chars().nth(1).ok_or(InvalidFenError::new(fen))?;
+    let rank_char = ep_sq
+        .chars()
+        .nth(1)
+        .ok_or(InvalidFenError::InvalidEpSquare)?;
     if !(rank_char == '3' || rank_char == '6') {
-        return Err(InvalidFenError::new(fen));
+        return Err(InvalidFenError::InvalidEpSquare);
     }
     let rank = rank_char as usize - '1' as usize;
 
-    Ok(rank * 8 + file)
+    Ok((rank * 8 + file) as u8)
 }
 
-fn halfmove_from_fen(fen: &str) -> Result<Option<usize>, InvalidFenError> {
+fn halfmove_from_fen(fen: &str) -> Result<u16, InvalidFenError> {
     let Some(halfmove_str) = fen.split(" ").nth(4) else {
-        return Ok(None);
+        return Ok(0);
     };
 
     let halfmove = halfmove_str
         .parse()
-        .map_err(|_| InvalidFenError::new(fen))?;
+        .map_err(|_| InvalidFenError::InvalidHalfmove)?;
 
-    Ok(Some(halfmove))
+    Ok(halfmove)
 }
 
 impl Board {
@@ -159,13 +178,21 @@ impl Board {
         let white = pieces[0] | pieces[2] | pieces[4] | pieces[6] | pieces[8] | pieces[10];
         let black = pieces[1] | pieces[3] | pieces[5] | pieces[7] | pieces[9] | pieces[11];
 
+        let ctm = ctm_from_fen(fen)?;
+
+        let castle_state = castle_state_from_fen(fen)?;
+
+        let ep = ep_sq_from_fen(fen)?;
+
+        let halfmove = halfmove_from_fen(fen)?;
+
         let mut board = Board {
             pieces,
             util: [white, black, white | black],
-            ctm: ctm_from_fen(fen)?,
-            castle_state: castle_state_from_fen(fen)?,
-            ep: ep_sq_from_fen(fen)?,
-            halfmove: halfmove_from_fen(fen)?.unwrap_or(0),
+            ctm,
+            castle_state,
+            ep,
+            halfmove,
             hash: 0,
             mg_value: 0,
             eg_value: 0,
@@ -173,10 +200,7 @@ impl Board {
 
         // regen the hash after everything is finished
         board.hash = gen_hash(board);
-        let mat = gen_mat_value(&board);
-        let (mg, eg) = gen_pst_value(&board);
-        board.mg_value = mat + mg;
-        board.eg_value = mat + eg;
+        (board.mg_value, board.eg_value) = gen_board_value(&board);
 
         Ok(board)
     }

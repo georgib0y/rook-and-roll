@@ -1,4 +1,4 @@
-use crate::board::board::{Board, ALL_PIECES, BISHOP, KING, QUEEN, ROOK, WHITE};
+use crate::board::board::{Board, ALL_PIECES, BISHOP, BLACK, KING, KNIGHT, QUEEN, ROOK, WHITE};
 use crate::movegen::move_info::{FA, FH, R2, R7, SQUARES};
 use crate::movegen::move_list::MoveList;
 use crate::movegen::movegen::get_xpiece;
@@ -6,7 +6,7 @@ use crate::movegen::moves::{Move, MoveType};
 
 const PROMO_PIECES: [u32; 4] = [
     QUEEN as u32 + 1,
-    KING as u32 + 1,
+    KNIGHT as u32 + 1,
     ROOK as u32 + 1,
     BISHOP as u32 + 1,
 ];
@@ -17,26 +17,26 @@ const PROMO_CAPS: [MoveType; 4] = [
     MoveType::BPromoCap,
 ];
 
-pub fn gen_bpawn_quiet(b: &Board, ml: &mut impl MoveList, pinned: u64, target: u64) {
-    if b.ctm == 0 {
+pub fn gen_bpawn_quiet<'a>(b: &Board, ml: &mut impl MoveList, pinned: u64, target: u64) {
+    if b.ctm() == WHITE {
         return;
     }
 
-    let pawns = b.pieces[1] & !pinned;
-    let occ = b.util[ALL_PIECES] | !target;
+    let pawns = b.pawns(BLACK) & !pinned;
+    let occ = b.all_occ() | !target;
     let quiet = pawns & !(occ << 8);
 
     let push = quiet & !R2;
     add_bpawn_push(ml, push);
 
-    let double = (pawns & R7) & !(occ << 16) & !(b.util[ALL_PIECES] << 8);
+    let double = (pawns & R7) & !(occ << 16) & !(b.all_occ() << 8);
     add_bpawn_double(ml, double);
 
     let promo = quiet & R2;
     add_bpawn_promo(ml, promo);
 }
 
-fn add_bpawn_push(ml: &mut impl MoveList, mut push: u64) {
+fn add_bpawn_push<'a>(ml: &mut impl MoveList, mut push: u64) {
     while push > 0 {
         let from = push.trailing_zeros();
         push &= push - 1;
@@ -45,7 +45,7 @@ fn add_bpawn_push(ml: &mut impl MoveList, mut push: u64) {
     }
 }
 
-fn add_bpawn_double(ml: &mut impl MoveList, mut double: u64) {
+fn add_bpawn_double<'a>(ml: &mut impl MoveList, mut double: u64) {
     while double > 0 {
         let from = double.trailing_zeros();
         double &= double - 1;
@@ -54,7 +54,7 @@ fn add_bpawn_double(ml: &mut impl MoveList, mut double: u64) {
     }
 }
 
-fn add_bpawn_promo(ml: &mut impl MoveList, mut promo: u64) {
+fn add_bpawn_promo<'a>(ml: &mut impl MoveList, mut promo: u64) {
     while promo > 0 {
         let from = promo.trailing_zeros();
         promo &= promo - 1;
@@ -65,13 +65,13 @@ fn add_bpawn_promo(ml: &mut impl MoveList, mut promo: u64) {
     }
 }
 
-pub fn gen_bpawn_attack(b: &Board, ml: &mut impl MoveList, pinned: u64, target: u64) {
-    if b.ctm == 0 {
+pub fn gen_bpawn_attack<'a>(b: &Board, ml: &mut impl MoveList, pinned: u64, target: u64) {
+    if b.ctm() == WHITE {
         return;
     }
 
-    let pawns = b.pieces[1] & !pinned;
-    let opp = b.util[WHITE] & target;
+    let pawns = b.pawns(BLACK) & !pinned;
+    let opp = b.occ(WHITE) & target;
 
     let lefts = (pawns & !FA) & (opp << 9);
     let rights = (pawns & !FH) & (opp << 7);
@@ -92,7 +92,7 @@ pub fn gen_bpawn_attack(b: &Board, ml: &mut impl MoveList, pinned: u64, target: 
     add_bpawn_ep(b, ml, pawns, FH, 7, target);
 }
 
-fn add_bpawn_attacks(b: &Board, ml: &mut impl MoveList, mut attacks: u64, direction: u32) {
+fn add_bpawn_attacks<'a>(b: &Board, ml: &mut impl MoveList, mut attacks: u64, direction: u32) {
     while attacks > 0 {
         let from = attacks.trailing_zeros();
         let xpiece = get_xpiece(b, from - direction).unwrap();
@@ -102,7 +102,12 @@ fn add_bpawn_attacks(b: &Board, ml: &mut impl MoveList, mut attacks: u64, direct
     }
 }
 
-fn add_bpawn_attack_promos(b: &Board, ml: &mut impl MoveList, mut attacks: u64, direction: u32) {
+fn add_bpawn_attack_promos<'a>(
+    b: &Board,
+    ml: &mut impl MoveList,
+    mut attacks: u64,
+    direction: u32,
+) {
     while attacks > 0 {
         let from = attacks.trailing_zeros();
         let xpiece = get_xpiece(b, from - direction).unwrap();
@@ -114,8 +119,15 @@ fn add_bpawn_attack_promos(b: &Board, ml: &mut impl MoveList, mut attacks: u64, 
     }
 }
 
-fn add_bpawn_ep(b: &Board, ml: &mut impl MoveList, pawns: u64, file: u64, shift: u32, target: u64) {
-    let ep = b.ep as u32;
+fn add_bpawn_ep<'a>(
+    b: &Board,
+    ml: &mut impl MoveList,
+    pawns: u64,
+    file: u64,
+    shift: u32,
+    target: u64,
+) {
+    let ep = b.ep() as u32;
     if ep < 64 && (SQUARES[ep as usize] & ((pawns & !file) >> shift) & target >> 8) > 0 {
         ml.add_move(Move::new(ep + shift, ep, 1, 0, MoveType::Ep))
     }
