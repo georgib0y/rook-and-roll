@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 chess = {path = "../chess"}
 log = "0.4.17"
+
+[build]
+rustflags = ["-C", "symbol-mangling-version=v0"]

@@ -3,7 +3,7 @@ pub mod game_state_st;
 
 use chess::board::board::Board;
 use chess::movegen::moves::PrevMoves;
-use chess::search::search::SeachResult;
+use chess::search::searchers::SeachResult;
 use std::io;
 use std::io::Write;
 

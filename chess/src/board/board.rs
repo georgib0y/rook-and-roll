@@ -1,11 +1,8 @@
-use crate::board::board_copier::{BoardCopier, BoardCopierWithHash};
-use crate::board::zorbist::Zorb;
-use crate::movegen::move_info::SQUARES;
+use crate::movegen::move_info::{PST, SQUARES};
 use crate::movegen::movegen::{get_piece, get_xpiece};
-use crate::movegen::moves::Move;
-use crate::search::eval::{gen_board_value, gen_mat_value, gen_pst_value};
-use std::marker::PhantomData;
-use std::{fmt, num};
+use crate::movegen::moves::{Move, MoveType};
+use crate::search::eval::{gen_board_value, MAT_SCORES};
+use std::fmt;
 
 pub const WHITE: usize = 0;
 pub const BLACK: usize = 1;
@@ -35,33 +32,10 @@ const DEFAULT_PIECES: [u64; 12] = [
 ];
 
 const DEFAULT_UTIL: [u64; 3] = [
-    DEFAULT_PIECES[0]
-        | DEFAULT_PIECES[2]
-        | DEFAULT_PIECES[4]
-        | DEFAULT_PIECES[6]
-        | DEFAULT_PIECES[8]
-        | DEFAULT_PIECES[10], // white
-    DEFAULT_PIECES[1]
-        | DEFAULT_PIECES[3]
-        | DEFAULT_PIECES[5]
-        | DEFAULT_PIECES[7]
-        | DEFAULT_PIECES[9]
-        | DEFAULT_PIECES[11], // black
-    DEFAULT_PIECES[0]
-        | DEFAULT_PIECES[2]
-        | DEFAULT_PIECES[4]
-        | DEFAULT_PIECES[6]
-        | DEFAULT_PIECES[8]
-        | DEFAULT_PIECES[10]
-        | DEFAULT_PIECES[1]
-        | DEFAULT_PIECES[3]
-        | DEFAULT_PIECES[5]
-        | DEFAULT_PIECES[7]
-        | DEFAULT_PIECES[9]
-        | DEFAULT_PIECES[11], // all
+    0x000000000000FFFF, // white
+    0xFFFF000000000000, // black
+    0xFFFF00000000FFFF, // all
 ];
-
-type Copier = BoardCopierWithHash;
 
 // 0 - white to move, 1 - black to move
 #[derive(Copy, Clone)]
@@ -194,7 +168,188 @@ impl Board {
     }
 
     pub fn copy_make(&self, m: Move) -> Board {
-        Copier::copy(self, m)
+        let (from, to, piece, xpiece, move_type) = m.all();
+        let from_to = SQUARES[from] | SQUARES[to];
+
+        let mut board = *self;
+        board.set_pieces(piece, from_to);
+        board.set_util(from_to);
+        board.set_castle_state(piece, from, to);
+        board.set_hash(piece, from, to);
+        board.set_values(piece, from, to);
+        board.ep = 64;
+        board.halfmove += 1;
+        board.apply_move(to, piece, xpiece, move_type);
+        board.hash ^= Zorb::colour();
+        board.ctm ^= 1;
+        board
+    }
+
+    fn set_pieces(&mut self, piece: usize, from_to: u64) {
+        self.pieces[piece] ^= from_to;
+    }
+
+    fn set_util(&mut self, from_to: u64) {
+        self.util[self.ctm()] ^= from_to;
+        self.util[ALL_PIECES] ^= from_to;
+    }
+
+    fn set_hash(&mut self, piece: usize, from: usize, to: usize) {
+        self.hash ^= Zorb::piece(piece, from)
+            ^ Zorb::piece(piece, to)
+            ^ ((self.ep < 64) as u64 * Zorb::ep_file(self.ep()))
+    }
+
+    fn set_values(&mut self, piece: usize, from: usize, to: usize) {
+        self.add_piece_value(piece, to);
+        self.remove_piece_value(piece, from);
+    }
+
+    pub fn set_castle_state(&mut self, piece: usize, from: usize, to: usize) {
+        // stop thinking you can optimise this
+
+        if (piece == 10 || from == 7 || to == 7) && self.castle_state & 0b1000 > 0 {
+            self.castle_state &= 0b0111;
+            self.hash ^= Zorb::castle_rights(WKS_STATE);
+        }
+
+        if (piece == 10 || from == 0 || to == 0) && self.castle_state & 0b100 > 0 {
+            self.castle_state &= 0b1011;
+            self.hash ^= Zorb::castle_rights(WQS_STATE);
+        }
+
+        if (piece == 11 || from == 63 || to == 63) && self.castle_state & 0b10 > 0 {
+            self.castle_state &= 0b1101;
+            self.hash ^= Zorb::castle_rights(BKS_STATE);
+        }
+
+        if (piece == 11 || from == 56 || to == 56) && self.castle_state & 0b1 > 0 {
+            self.castle_state &= 0b1110;
+            self.hash ^= Zorb::castle_rights(BQS_STATE);
+        }
+    }
+    fn apply_move(&mut self, to: usize, piece: usize, xpiece: usize, move_type: MoveType) {
+        match move_type {
+            MoveType::Quiet => self.apply_quiet(piece),
+            MoveType::Double => self.apply_double(to),
+            MoveType::Cap => self.apply_cap(xpiece, to),
+            MoveType::WKingSide => self.apply_castle(0, 7, 5),
+            MoveType::BKingSide => self.apply_castle(1, 63, 61),
+            MoveType::WQueenSide => self.apply_castle(0, 0, 3),
+            MoveType::BQueenSide => self.apply_castle(1, 56, 59),
+            MoveType::Promo => self.apply_promo(piece, xpiece, to),
+            MoveType::NPromoCap
+            | MoveType::RPromoCap
+            | MoveType::BPromoCap
+            | MoveType::QPromoCap => self.apply_promo_cap(move_type, piece, xpiece, to),
+            MoveType::Ep => self.apply_ep(to),
+        }
+    }
+
+    fn apply_quiet(&mut self, piece: usize) {
+        self.halfmove *= (piece > 1) as u16;
+    }
+
+    fn apply_double(&mut self, to: usize) {
+        self.ep = to as u8 - 8 + (self.ctm * 16);
+        self.hash ^= Zorb::ep_file(self.ep());
+        self.halfmove = 0;
+    }
+
+    fn apply_cap(&mut self, xpiece: usize, to: usize) {
+        self.pieces[xpiece] ^= SQUARES[to];
+        self.util[self.opp_ctm()] ^= SQUARES[to];
+        self.util[ALL_PIECES] ^= SQUARES[to];
+
+        self.remove_piece_value(xpiece, to);
+        self.toggle_piece_hash(xpiece, to);
+
+        self.halfmove = 0;
+    }
+
+    fn apply_castle(&mut self, colour: usize, from: usize, to: usize) {
+        let sqs = SQUARES[from] | SQUARES[to];
+        self.pieces[ROOK + colour] ^= sqs;
+        self.util[colour] ^= sqs;
+        self.util[ALL_PIECES] ^= sqs;
+
+        self.add_piece_value(ROOK + colour, to);
+        self.remove_piece_value(ROOK + colour, from);
+
+        self.toggle_piece_hash(ROOK + colour, to);
+        self.toggle_piece_hash(ROOK + colour, from);
+    }
+
+    fn apply_promo(&mut self, piece: usize, xpiece: usize, to: usize) {
+        // toggle the pawn off and the toggled piece on
+        self.pieces[self.ctm()] ^= SQUARES[to];
+        self.pieces[xpiece] ^= SQUARES[to];
+
+        self.toggle_piece_hash(piece, to);
+        self.toggle_piece_hash(xpiece, to);
+
+        self.remove_piece_value(piece, to);
+        self.add_piece_value(xpiece, to);
+
+        self.halfmove = 0;
+    }
+
+    fn apply_promo_cap(&mut self, move_type: MoveType, piece: usize, xpiece: usize, to: usize) {
+        // N_PROMO_CAP (8) - 7 = [1], [1] * 2 + b.colour_to_move == 2 or 3 (knight idx)
+        // R_PROMO_CAP (9) - 7 = [2], [2] * 2 + b.colour_to_move == 4 or 5 (rook idx) etc
+        let promo_piece = (move_type as usize - 7) * 2 + self.ctm();
+
+        // toggle captured piece
+        self.pieces[xpiece] ^= SQUARES[to];
+        self.util[self.opp_ctm()] ^= SQUARES[to];
+        // retoggle piece (as its been replaced by the capture-er)
+        self.util[ALL_PIECES] ^= SQUARES[to];
+        // toggle pawn off
+        self.pieces[self.ctm()] ^= SQUARES[to];
+        // toggle promo
+        self.pieces[promo_piece] ^= SQUARES[to];
+
+        self.toggle_piece_hash(piece, to);
+        self.toggle_piece_hash(promo_piece, to);
+        self.toggle_piece_hash(xpiece, to);
+
+        self.remove_piece_value(piece, to);
+        self.remove_piece_value(xpiece, to);
+        self.add_piece_value(promo_piece, to);
+
+        self.halfmove = 0;
+    }
+
+    fn apply_ep(&mut self, to: usize) {
+        let ep_sq = to - 8 + (self.ctm() * 16);
+        self.pieces[self.opp_ctm()] ^= SQUARES[ep_sq]; // toggle capture pawn off
+        self.util[self.opp_ctm()] ^= SQUARES[ep_sq];
+        self.util[ALL_PIECES] ^= SQUARES[ep_sq];
+
+        self.toggle_piece_hash(self.opp_ctm(), ep_sq);
+        self.remove_piece_value(self.opp_ctm(), ep_sq);
+
+        self.halfmove = 0;
+    }
+
+    fn toggle_piece_hash(&mut self, piece: usize, to: usize) {
+        self.hash ^= Zorb::piece(piece, to);
+    }
+
+    fn add_piece_value(&mut self, piece: usize, sq: usize) {
+        let mat = MAT_SCORES[piece];
+        let (mg, eg) = PST::pst(piece, sq);
+
+        self.mg_value += mat + mg as i32;
+        self.eg_value += mat + eg as i32;
+    }
+
+    fn remove_piece_value(&mut self, piece: usize, sq: usize) {
+        let mat = MAT_SCORES[piece];
+        let (mg, eg) = PST::pst(piece, sq);
+
+        self.mg_value -= mat + mg as i32;
+        self.eg_value -= mat + eg as i32;
     }
 }
 
@@ -230,6 +385,56 @@ pub const WKS_STATE: usize = 0;
 pub const WQS_STATE: usize = 1;
 pub const BKS_STATE: usize = 2;
 pub const BQS_STATE: usize = 3;
+
+static ZORB_ARR: [u64; 781] = gen_zorb();
+
+const SEED: u64 = 72520922902527;
+
+const fn xorshift(mut x: u64) -> u64 {
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    x
+}
+
+const fn gen_zorb() -> [u64; 781] {
+    let mut zorb = [0; 781];
+
+    let mut x = SEED;
+    let mut i = 0;
+    while i < 781 {
+        x = xorshift(x);
+        zorb[i] = x;
+        i += 1;
+    }
+
+    zorb
+}
+
+// zorbist array indexing:
+// 0-767: piece positions, 768: colour, 769-772: castle rights, 773-780: file of ep square
+pub struct Zorb;
+impl Zorb {
+    #[inline]
+    pub fn piece(piece: usize, sq: usize) -> u64 {
+        unsafe { ZORB_ARR[piece * 64 + sq] }
+    }
+
+    #[inline]
+    pub fn colour() -> u64 {
+        unsafe { ZORB_ARR[768] }
+    }
+
+    #[inline]
+    pub fn castle_rights(idx: usize) -> u64 {
+        unsafe { ZORB_ARR[769 + idx] }
+    }
+
+    #[inline]
+    pub fn ep_file(sq: usize) -> u64 {
+        unsafe { ZORB_ARR[773 + (sq % 8)] }
+    }
+}
 
 pub fn gen_hash(board: Board) -> u64 {
     let mut hash = 0;
@@ -298,6 +503,7 @@ pub fn _print_bb(bb: u64) {
 
 #[test]
 fn inc_value_update() {
+    use crate::search::eval::{gen_mat_value, gen_pst_value};
     crate::init();
     let board =
         Board::new_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1").unwrap();
@@ -329,4 +535,70 @@ fn inc_value_update() {
 
     assert_eq!(cap_board.mg_value, mg_cap);
     assert_eq!(cap_board.eg_value, eg_cap);
+}
+
+#[test]
+fn test_inc_values_and_hash_copy_make() {
+    crate::init();
+    use crate::board::board::*;
+    use crate::search::eval::*;
+
+    let tests = vec![
+        (
+            "Captures",
+            Board::new_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -")
+                .unwrap(),
+            vec![
+                Move::new(21, 23, QUEEN as u32, BLACK as u32, MoveType::Cap),
+                Move::new(12, 40, BISHOP as u32, BISHOP as u32 + 1, MoveType::Cap),
+                Move::new(36, 53, KNIGHT as u32, BLACK as u32, MoveType::Cap),
+            ],
+        ),
+        (
+            "Castles W",
+            Board::new_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -")
+                .unwrap(),
+            vec![
+                Move::new(4, 2, KING as u32, 0, MoveType::WQueenSide),
+                Move::new(4, 6, KING as u32, 0, MoveType::WKingSide),
+            ],
+        ),
+        (
+            "Castles B",
+            Board::new_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R b KQkq -")
+                .unwrap(),
+            vec![
+                Move::new(60, 58, KING as u32 + 1, 0, MoveType::BQueenSide),
+                Move::new(60, 62, KING as u32 + 1, 0, MoveType::BKingSide),
+            ],
+        ),
+        (
+            "Ep",
+            Board::new_fen("8/8/3p4/KPp4r/4Pp1k/8/6P1/1R6 b - e3 0 2").unwrap(),
+            vec![Move::new(29, 20, BLACK as u32, WHITE as u32, MoveType::Ep)],
+        ),
+    ];
+
+    tests.into_iter().for_each(|(title, board, moves)| {
+        println!("{title}\n{board}");
+
+        let (mg_value, eg_value) = gen_board_value(&board);
+
+        assert_eq!(board.mg_value, mg_value);
+        assert_eq!(board.eg_value, eg_value);
+
+        moves.into_iter().for_each(|m| {
+            let b = board.copy_make(m);
+
+            println!("{b}\n{m}");
+
+            let (mg_value, eg_value) = gen_board_value(&b);
+
+            assert_eq!(b.mg_value, mg_value);
+            assert_eq!(b.eg_value, eg_value);
+
+            let hash = gen_hash(b);
+            assert_eq!(b.hash, hash)
+        })
+    });
 }

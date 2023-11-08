@@ -1,9 +1,9 @@
 use crate::game_state::UciGameState;
 use chess::board::board::Board;
 use chess::movegen::moves::PrevMoves;
-use chess::search::search::smp_searcher::lazy_smp;
-use chess::search::search::SeachResult;
-use chess::search::tt::smp_tt::SmpTTable;
+use chess::search::searchers::smp_searcher::lazy_smp;
+use chess::search::searchers::SeachResult;
+use chess::search::tt::SmpTTable;
 use std::io::Write;
 use std::sync::Arc;
 

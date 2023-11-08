@@ -1,20 +1,22 @@
-use crate::board::board::{Board, BLACK, KING, WHITE};
-use crate::movegen::move_list::{ScoredMoveList, StackMoveList, MAX_MOVES};
-use crate::movegen::movegen::{is_in_check, is_legal_move, moved_into_check};
+use crate::board::{Board, BLACK, KING, WHITE};
+use crate::movegen::move_list::{ScoredMoveList, MAX_MOVES};
+use crate::movegen::movegen::{
+    gen_all_attacks, gen_check_moves, gen_moves, is_in_check, is_legal_move, moved_into_check,
+};
 use crate::movegen::moves::{Move, MoveType};
-use crate::movegen::piece_gen::{gen_all_attacks, gen_moves};
-use crate::search::eval::{eval, MATED, PIECE_VALUES};
-use crate::search::search::{SeachResult, SearchError, Searcher, MIN_SCORE};
-use crate::search::tt::EntryType::{Alpha, Beta, PV};
+use crate::search::eval::{eval, CHECKMATE, MATED, PIECE_VALUES, STALEMATE};
+use crate::search::searchers::{SeachResult, SearchError, Searcher, MIN_SCORE};
+use crate::search::tt::EntryScore;
+use crate::search::tt::EntryScore::{Alpha, Beta, PV};
 
 pub fn root_pvs(
     s: &mut impl Searcher,
     b: &Board,
-    alpha: i32,
+    mut alpha: i32,
     beta: i32,
     depth: usize,
 ) -> SeachResult {
-    s.init_search(b);
+    s.init_search(b, depth);
 
     let in_check = is_in_check(b);
 
@@ -29,46 +31,67 @@ pub fn root_pvs(
             continue;
         };
 
-        if score > best_score {
+        if score > alpha {
             best_score = score;
-            best_move = Some(m)
+            best_move = Some(m);
+            alpha = score;
         }
+
+        if score >= beta {
+            beta_cuttoff(s, b, m, beta, depth);
+            return Ok((best_score, best_move.ok_or(SearchError::FailHigh)?));
+        }
+
+        s.store_tt(b.hash(), Alpha(alpha), best_move);
     }
 
-    if best_score == beta {
-        Err(SearchError::FailHigh)?
-    }
-
+    s.store_tt(b.hash(), PV(alpha), best_move);
     Ok((best_score, best_move.ok_or(SearchError::FailLow)?))
 }
 
-// TODO negamax for now, but switch to pvs when move ordering is done
 fn pvs(s: &mut impl Searcher, b: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
     if s.has_aborted() {
         return MIN_SCORE;
     }
 
     // probe tt
-    if let Some(score) = s.probe_tt(b.hash(), alpha, beta, depth) {
+    if let Some(score) = s.probe_tt(b.hash(), alpha, beta) {
         return score;
     }
 
     if depth == 0 {
         let q_score = quiesce(s, b, alpha, beta);
-        s.store_tt(b.hash(), q_score, PV, depth, None);
+        s.store_tt(b.hash(), PV(q_score), None);
         return q_score;
     }
 
     let in_check = is_in_check(b);
     let mut best_move = None;
-    let mut entry_type = Alpha;
+    let mut entry_score = Alpha(alpha);
 
     let mut ml: ScoredMoveList<_, MAX_MOVES> = ScoredMoveList::new(b, s, depth);
     gen_moves(b, &mut ml, in_check);
 
+    let mut found_pv = false;
+    let mut has_moved = false;
+
     for m in ml {
-        let Some(score) = try_move(s, b, m, alpha, beta, depth) else {
-            continue;
+        let score = if found_pv {
+            let Some(mut score) = try_non_pv_move(s, b, m, alpha, depth) else {
+                continue;
+            };
+
+            if score > alpha && score < beta {
+                score = try_move(s, b, m, alpha, beta, depth).unwrap();
+            }
+
+            score
+        } else {
+            let Some(score) = try_move(s, b, m, alpha, beta, depth) else {
+                continue;
+            };
+            has_moved = true;
+            score
         };
 
         if score >= beta {
@@ -77,13 +100,15 @@ fn pvs(s: &mut impl Searcher, b: &Board, mut alpha: i32, beta: i32, depth: usize
         }
 
         if score > alpha {
-            entry_type = PV;
-            best_move = Some(m);
             alpha = score;
+            best_move = Some(m);
+            entry_score = PV(alpha);
+            found_pv = true;
         }
     }
 
-    s.store_tt(b.hash(), alpha, entry_type, depth, best_move);
+    update_alpha_checkmate_score(s, &mut alpha, &mut entry_score, in_check, has_moved);
+    s.store_tt(b.hash(), entry_score, best_move);
 
     alpha
 }
@@ -138,7 +163,7 @@ fn try_non_pv_move(
 }
 
 fn beta_cuttoff(s: &mut impl Searcher, b: &Board, m: Move, beta: i32, depth: usize) {
-    s.store_tt(b.hash(), beta, Beta, depth, Some(m));
+    s.store_tt(b.hash(), Beta(beta), Some(m));
 
     if m.move_type() == MoveType::Quiet {
         s.km_store(m, depth);
@@ -146,24 +171,49 @@ fn beta_cuttoff(s: &mut impl Searcher, b: &Board, m: Move, beta: i32, depth: usi
     }
 }
 
+fn update_alpha_checkmate_score(
+    s: &mut impl Searcher,
+    alpha: &mut i32,
+    entry_score: &mut EntryScore,
+    is_in_check: bool,
+    has_moved: bool,
+) {
+    if is_in_check && !has_moved {
+        *alpha = CHECKMATE + s.ply();
+        *entry_score = PV(*alpha);
+    } else if !has_moved {
+        *alpha = STALEMATE;
+        *entry_score = PV(*alpha);
+    }
+}
+
 pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) -> i32 {
-    if is_in_check(board) {
-        return pvs(s, board, alpha, beta, 1);
+    let in_check = is_in_check(board);
+
+    let eval = if in_check {
+        alpha
+    } else {
+        let eval = eval(board, s.colour_multiplier());
+
+        if eval >= beta {
+            return beta;
+        }
+
+        if alpha < eval {
+            alpha = eval;
+        }
+
+        eval
+    };
+
+    let mut ml = ScoredMoveList::<_, MAX_MOVES>::new(board, s, 0);
+    if in_check {
+        gen_check_moves(board, &mut ml);
+    } else {
+        gen_all_attacks(board, &mut ml);
     }
 
-    let eval = eval(board, s.colour_multiplier());
-
-    if eval >= beta {
-        return beta;
-    }
-
-    if alpha < eval {
-        alpha = eval;
-    }
-
-    let mut ml = StackMoveList::default();
-    gen_all_attacks(board, &mut ml);
-
+    let mut has_moved = false;
     for m in ml {
         if m.xpiece() >= KING as u32 {
             return MATED - s.ply();
@@ -172,6 +222,8 @@ pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) 
         let Some(score) = try_move_quiesce(s, board, m, alpha, beta, eval) else {
             continue;
         };
+
+        has_moved = true;
 
         if score >= beta {
             return beta;
@@ -182,7 +234,11 @@ pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) 
         }
     }
 
-    alpha
+    if in_check && !has_moved {
+        CHECKMATE + s.ply()
+    } else {
+        alpha
+    }
 }
 
 fn try_move_quiesce(

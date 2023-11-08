@@ -1,4 +1,4 @@
-pub mod board;
-mod board_copier;
+mod board;
 pub mod fen;
-pub mod zorbist;
+pub use board::Zorb;
+pub use board::*;

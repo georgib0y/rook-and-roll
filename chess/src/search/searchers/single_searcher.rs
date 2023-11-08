@@ -1,18 +1,17 @@
-use crate::board::board::{Board, WHITE};
+use crate::board::{Board, WHITE};
 use crate::movegen::moves::{KillerMoves, Move, PrevMoves, NULL_MOVE};
 use crate::search::eval::PAWN_VALUE;
-use crate::search::hh::HistoryTable;
-use crate::search::search::search::root_pvs;
-use crate::search::search::{SeachResult, SearchError, Searcher, MAX_SCORE};
-use crate::search::search::{MAX_DEPTH, MIN_SCORE};
-use crate::search::tt::tt::TTable;
-use crate::search::tt::EntryType;
+use crate::search::search::root_pvs;
+use crate::search::searchers::{SeachResult, SearchError, Searcher, MAX_SCORE};
+use crate::search::searchers::{MAX_DEPTH, MIN_SCORE};
+use crate::search::tt::EntryScore;
+use crate::search::tt::TTable;
+use crate::search::HistoryTable;
 use std::cmp::{max, min};
 use std::io::Write;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
-const TIME_LIMIT_MS: u128 = 3000;
+const TIME_LIMIT_MS: u128 = 1500;
 
 pub fn iterative_deepening(
     board: &Board,
@@ -26,7 +25,7 @@ pub fn iterative_deepening(
 
     let mut best_result: (i32, Move) = (MIN_SCORE, NULL_MOVE);
 
-    for depth in 1..=MAX_DEPTH {
+    for depth in 1..MAX_DEPTH {
         if start.elapsed().as_millis() > TIME_LIMIT_MS {
             searcher.abort();
             break;
@@ -42,20 +41,25 @@ pub fn iterative_deepening(
         // };
 
         let res = root_pvs(&mut searcher, board, alpha_window, beta_window, depth)?;
-        writeln!(
-            out,
-            "info depth {} score cp {} pv {}",
-            depth,
-            res.0,
-            res.1.as_uci_string()
-        )
-        .unwrap();
+        let pv_str = searcher
+            .tt
+            .get_full_pv(board)
+            .iter()
+            .fold(String::new(), |pv, m| pv.add(&m.as_uci_string()).add(" "));
 
-        println!(
-            "{} hits, {} misses",
-            searcher.tt_hits.load(Ordering::SeqCst),
-            searcher.tt_misses.load(Ordering::SeqCst)
-        );
+        if start.elapsed().as_millis() > 0 {
+            writeln!(out, "info depth {} score cp {} pv {}", depth, res.0, pv_str).unwrap();
+
+            let hits = searcher.tt.hits();
+            let collisions = searcher.tt.collisions();
+            let misses = searcher.tt.misses();
+            let total = hits + misses + collisions;
+            let percent = (hits as f64 / total as f64) * 100.0;
+            println!(
+                "{} hits, {} collisions, {} misses, {} total, {}%",
+                hits, collisions, misses, total, percent
+            );
+        }
 
         best_result = res;
     }
@@ -98,35 +102,33 @@ fn root_search(s: &mut SingleSearcher, b: &Board, best_score: i32, depth: usize)
                     alpha_window = max(best_score - (PAWN_VALUE / alpha_window_width), MIN_SCORE);
                 }
             }
-            _ => panic!("Unknown error finding move in root search"),
+            _ => panic!("Unknown error finding move in root searchers"),
         }
     }
 }
 
 struct SingleSearcher<'a> {
     abort: bool,
+    root_depth: i32,
     ply: i32,
     colour_multiplier: i32,
     tt: &'a mut TTable,
     km: KillerMoves,
     hh: HistoryTable,
     prev_moves: &'a mut PrevMoves,
-    tt_hits: AtomicUsize,
-    tt_misses: AtomicUsize,
 }
 
 impl<'a> SingleSearcher<'a> {
     pub fn new(tt: &'a mut TTable, prev_moves: &'a mut PrevMoves) -> SingleSearcher<'a> {
         SingleSearcher {
             abort: false,
+            root_depth: 0,
             ply: 0,
             colour_multiplier: 0,
             tt,
             km: KillerMoves::new(),
             hh: HistoryTable::new(),
             prev_moves,
-            tt_hits: AtomicUsize::new(0),
-            tt_misses: AtomicUsize::new(0),
         }
     }
 
@@ -136,47 +138,33 @@ impl<'a> SingleSearcher<'a> {
 }
 
 impl<'a> Searcher for SingleSearcher<'a> {
-    fn init_search(&mut self, b: &Board) {
+    fn init_search(&mut self, b: &Board, depth: usize) {
         self.colour_multiplier = if b.ctm() == WHITE { 1 } else { -1 };
-        self.ply = 0
+        self.ply = 0;
+        self.root_depth = depth as i32;
     }
 
     fn has_aborted(&self) -> bool {
         self.abort
     }
 
-    fn probe_tt(&self, hash: u64, alpha: i32, beta: i32, depth: usize) -> Option<i32> {
-        let res = self.tt.get_score(hash, depth, alpha, beta, self.ply);
-
-        if res.is_some() {
-            self.tt_hits.fetch_add(1, Ordering::SeqCst);
-        } else {
-            self.tt_misses.fetch_add(1, Ordering::SeqCst);
-        }
-
-        res
-
+    fn probe_tt(&self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
+        self.tt.get_score(hash, self.draft(), alpha, beta)
         // None
     }
 
-    fn store_tt(
-        &mut self,
-        hash: u64,
-        score: i32,
-        entry_type: EntryType,
-        depth: usize,
-        best_move: Option<Move>,
-    ) {
-        self.tt
-            .insert(hash, score, entry_type, depth, best_move, self.ply as usize)
+    fn store_tt(&mut self, hash: u64, score: EntryScore, best_move: Option<Move>) {
+        self.tt.insert(hash, score, best_move, self.draft())
     }
 
     fn get_tt_best_move(&self, hash: u64) -> Option<Move> {
-        self.tt.get_best(hash)
+        self.tt.get_bestmove(hash)
+        // None
     }
 
     fn get_tt_pv_move(&mut self, hash: u64) -> Option<Move> {
-        self.tt.get_best(hash)
+        self.tt.get_bestmove(hash)
+        // None
     }
 
     fn km_get(&self, depth: usize) -> [Option<Move>; 2] {
@@ -189,6 +177,10 @@ impl<'a> Searcher for SingleSearcher<'a> {
 
     fn ply(&self) -> i32 {
         self.ply
+    }
+
+    fn draft(&self) -> i32 {
+        self.root_depth - self.ply
     }
 
     fn colour_multiplier(&self) -> i32 {

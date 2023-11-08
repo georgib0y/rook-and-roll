@@ -7,14 +7,14 @@ movetype 0-12,  4 bits
               ----------
                 24 bits
 
-ep, last castle state and last halfmove can all be stored in search - aha not with copy move tho
+ep, last castle state and last halfmove can all be stored in searchers - aha not with copy move tho
 */
 
-use crate::board::board::PIECE_NAMES;
-use crate::board::board::{Board, WHITE};
+use crate::board::{Board, PIECE_NAMES, WHITE};
 use crate::movegen::move_info::SQ_NAMES;
-use crate::movegen::movegen::{get_piece, get_xpiece, CAP_SCORE_OFFSET};
-use crate::search::search::MAX_DEPTH;
+use crate::movegen::move_list::CAP_SCORE_OFFSET;
+use crate::movegen::movegen::{get_piece, get_xpiece};
+use crate::search::searchers::MAX_DEPTH;
 use std::fmt::{Display, Formatter};
 
 const PREV_MOVE_SIZE: usize = 16384;
@@ -96,7 +96,7 @@ impl Display for MoveType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, PartialOrd, PartialEq)]
 pub struct Move(u32);
 
 impl Move {

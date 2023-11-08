@@ -1,5 +1,4 @@
-use crate::board::zorbist::Zorb;
-use crate::movegen::move_tables::MT;
+use crate::movegen::move_info::MT;
 
 pub mod board;
 pub mod movegen;
@@ -7,13 +6,12 @@ pub mod perft;
 pub mod search;
 
 pub fn init() {
-    Zorb::init();
     MT::init();
 }
 
 #[cfg(test)]
 mod perft_tests {
-    use crate::board::board::Board;
+    use crate::board::Board;
     use crate::perft::Perft;
     use std::time::Instant;
 

@@ -1,8 +1,7 @@
-use crate::board::board::Board;
+use crate::board::Board;
 use crate::movegen::move_list::StackMoveList;
 use crate::movegen::movegen::*;
 use crate::movegen::moves::{Move, PrevMoves};
-use crate::movegen::piece_gen::{gen_all_moves, gen_check_moves};
 
 pub struct Perft {
     pub mc: usize,

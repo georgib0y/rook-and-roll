@@ -1,6 +1,6 @@
 use crate::board::board::{gen_hash, Board};
 use crate::movegen::move_info::SQUARES;
-use crate::search::eval::{gen_board_value, gen_mat_value, gen_pst_value};
+use crate::search::eval::gen_board_value;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Display, Formatter};

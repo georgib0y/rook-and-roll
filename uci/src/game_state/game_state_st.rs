@@ -1,11 +1,11 @@
 use crate::game_state::UciGameState;
 use chess::board::board::Board;
 use chess::movegen::moves::PrevMoves;
-use chess::search::search::single_searcher::iterative_deepening;
-use chess::search::search::SeachResult;
-use chess::search::tt::tt::TTable;
+use chess::search::searchers::single_searcher::iterative_deepening;
+use chess::search::searchers::SeachResult;
+use chess::search::tt::TTable;
+use std::io;
 use std::io::Write;
-use std::{io};
 
 pub struct GameStateST {
     tt: TTable,

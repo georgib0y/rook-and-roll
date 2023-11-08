@@ -304,21 +304,26 @@ const BIT_TABLE: [i32; 64] = [
     39, 48, 24, 59, 14, 12, 55, 38, 28, 58, 20, 37, 17, 36, 8,
 ];
 
-fn pop_1st_bit(bb: &mut u64) -> i32 {
-    let b = *bb ^ (*bb - 1);
+const fn pop_1st_bit(mut bb: u64) -> (u64, i32) {
+    let b = bb ^ (bb - 1);
     let fold: u32 = ((b & 0xffffffff) ^ (b >> 32)) as u32;
-    *bb &= *bb - 1;
-    BIT_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize]
+    bb &= bb - 1;
+    (
+        bb,
+        BIT_TABLE[(fold.wrapping_mul(0x783a9b23) >> 26) as usize],
+    )
 }
 
-pub fn index_to_u64(index: i32, bits: i32, mut mask: u64) -> u64 {
+pub const fn index_to_u64(index: i32, bits: i32, mut mask: u64) -> u64 {
     let mut result: u64 = 0;
     let mut i = 0;
-    for i in 0..bits {
-        let j = pop_1st_bit(&mut mask);
+    let mut j = 0;
+    while i < bits {
+        (mask, j) = pop_1st_bit(mask);
         if index & (1 << i) != 0 {
             result |= 1 << j;
         }
+        i += 1;
     }
 
     result

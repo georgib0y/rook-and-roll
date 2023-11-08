@@ -1,3 +1,7 @@
+use crate::movegen::magic::{
+    batt, index_to_u64, ratt, BISHOP_MAGIC, BISHOP_MASK, B_BIT, ROOK_MAGIC, ROOK_MASK, R_BIT,
+};
+
 const fn generate_squares() -> [u64; 65] {
     let mut squares = [0; 65];
     let mut i = 0;
@@ -14,22 +18,24 @@ pub const SQUARES: [u64; 65] = generate_squares();
 // file masks
 pub const FA: u64 = 0x0101010101010101;
 pub const FB: u64 = 0x0202020202020202;
-pub const _FC: u64 = 0x0404040404040404;
-pub const _FD: u64 = 0x0808080808080808;
-pub const _FE: u64 = 0x1010101010101010;
-pub const _FF: u64 = 0x2020202020202020;
+pub const FC: u64 = 0x0404040404040404;
+pub const FD: u64 = 0x0808080808080808;
+pub const FE: u64 = 0x1010101010101010;
+pub const FF: u64 = 0x2020202020202020;
 pub const FG: u64 = 0x4040404040404040;
 pub const FH: u64 = 0x8080808080808080;
+pub const FILES: [u64; 8] = [FA, FB, FC, FD, FE, FF, FG, FH];
 
 // rank masks
 pub const R1: u64 = 0x00000000000000FF;
 pub const R2: u64 = 0x000000000000FF00;
-pub const _R3: u64 = 0x0000000000FF0000;
-pub const _R4: u64 = 0x00000000FF000000;
-pub const _R5: u64 = 0x000000FF00000000;
-pub const _R6: u64 = 0x0000FF0000000000;
+pub const R3: u64 = 0x0000000000FF0000;
+pub const R4: u64 = 0x00000000FF000000;
+pub const R5: u64 = 0x000000FF00000000;
+pub const R6: u64 = 0x0000FF0000000000;
 pub const R7: u64 = 0x00FF000000000000;
 pub const R8: u64 = 0xFF00000000000000;
+pub const RANKS: [u64; 8] = [R1, R2, R3, R4, R5, R6, R7, R8];
 
 pub const SQ_NAMES: [&str; 64] = [
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
@@ -38,16 +44,6 @@ pub const SQ_NAMES: [&str; 64] = [
     "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 ];
 
-/*
-0: up left
-1: up
-2: up right
-3: right
-4: down right
-5: down
-6: down left
-7: left
-*/
 pub const UP_LEFT_DIR: usize = 0;
 pub const UP_DIR: usize = 1;
 pub const UP_RIGHT_DIR: usize = 2;
@@ -57,34 +53,6 @@ pub const DOWN_DIR: usize = 5;
 pub const DOWN_LEFT_DIR: usize = 6;
 pub const LEFT_DIR: usize = 7;
 
-// const fn generate_rays() -> [[u64; 65]; 8] {
-//     let mut rays = [[0; 65]; 8];
-//     let mut sq = 0;
-//
-//
-//     let mut up = 0x0101010101010100u64;
-//     while sq < 64 {
-//         rays[sq][UP] = up;
-//         sq += 1;
-//         up <<= 1;
-//     }
-//
-//     sq = 63
-//     let mut down =
-//
-//     rays
-// }
-//
-// const fn right_ray(sq: usize) -> u64 {
-//
-// }
-//
-// const fn up_ray(sq: usize) -> u64 {
-//
-// }
-//
-// const pos_diag()
-
 pub struct RAYS;
 
 impl RAYS {
@@ -93,595 +61,129 @@ impl RAYS {
     }
 }
 
-const RAY_ARRAY: [[u64; 65]; 8] = [
+pub const RAY_ARRAY: [[u64; 65]; 8] = gen_rays();
+
+const fn gen_rays() -> [[u64; 65]; 8] {
+    let (up, down) = gen_vertical();
+    let (right, left) = gen_horizontal();
+    let (up_right, down_left) = gen_pos_diagonal();
+    let (up_left, down_right) = gen_neg_diagonal();
+
     [
-        0x0,
-        0x100,
-        0x10200,
-        0x1020400,
-        0x102040800,
-        0x10204081000,
-        0x1020408102000,
-        0x102040810204000,
-        0x0,
-        0x10000,
-        0x1020000,
-        0x102040000,
-        0x10204080000,
-        0x1020408100000,
-        0x102040810200000,
-        0x204081020400000,
-        0x0,
-        0x1000000,
-        0x102000000,
-        0x10204000000,
-        0x1020408000000,
-        0x102040810000000,
-        0x204081020000000,
-        0x408102040000000,
-        0x0,
-        0x100000000,
-        0x10200000000,
-        0x1020400000000,
-        0x102040800000000,
-        0x204081000000000,
-        0x408102000000000,
-        0x810204000000000,
-        0x0,
-        0x10000000000,
-        0x1020000000000,
-        0x102040000000000,
-        0x204080000000000,
-        0x408100000000000,
-        0x810200000000000,
-        0x1020400000000000,
-        0x0,
-        0x1000000000000,
-        0x102000000000000,
-        0x204000000000000,
-        0x408000000000000,
-        0x810000000000000,
-        0x1020000000000000,
-        0x2040000000000000,
-        0x0,
-        0x100000000000000,
-        0x200000000000000,
-        0x400000000000000,
-        0x800000000000000,
-        0x1000000000000000,
-        0x2000000000000000,
-        0x4000000000000000,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0,
-    ],
-    [
-        0x101010101010100,
-        0x202020202020200,
-        0x404040404040400,
-        0x808080808080800,
-        0x1010101010101000,
-        0x2020202020202000,
-        0x4040404040404000,
-        0x8080808080808000,
-        0x101010101010000,
-        0x202020202020000,
-        0x404040404040000,
-        0x808080808080000,
-        0x1010101010100000,
-        0x2020202020200000,
-        0x4040404040400000,
-        0x8080808080800000,
-        0x101010101000000,
-        0x202020202000000,
-        0x404040404000000,
-        0x808080808000000,
-        0x1010101010000000,
-        0x2020202020000000,
-        0x4040404040000000,
-        0x8080808080000000,
-        0x101010100000000,
-        0x202020200000000,
-        0x404040400000000,
-        0x808080800000000,
-        0x1010101000000000,
-        0x2020202000000000,
-        0x4040404000000000,
-        0x8080808000000000,
-        0x101010000000000,
-        0x202020000000000,
-        0x404040000000000,
-        0x808080000000000,
-        0x1010100000000000,
-        0x2020200000000000,
-        0x4040400000000000,
-        0x8080800000000000,
-        0x101000000000000,
-        0x202000000000000,
-        0x404000000000000,
-        0x808000000000000,
-        0x1010000000000000,
-        0x2020000000000000,
-        0x4040000000000000,
-        0x8080000000000000,
-        0x100000000000000,
-        0x200000000000000,
-        0x400000000000000,
-        0x800000000000000,
-        0x1000000000000000,
-        0x2000000000000000,
-        0x4000000000000000,
-        0x8000000000000000,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0,
-    ],
-    [
-        0x8040201008040200,
-        0x80402010080400,
-        0x804020100800,
-        0x8040201000,
-        0x80402000,
-        0x804000,
-        0x8000,
-        0x0,
-        0x4020100804020000,
-        0x8040201008040000,
-        0x80402010080000,
-        0x804020100000,
-        0x8040200000,
-        0x80400000,
-        0x800000,
-        0x0,
-        0x2010080402000000,
-        0x4020100804000000,
-        0x8040201008000000,
-        0x80402010000000,
-        0x804020000000,
-        0x8040000000,
-        0x80000000,
-        0x0,
-        0x1008040200000000,
-        0x2010080400000000,
-        0x4020100800000000,
-        0x8040201000000000,
-        0x80402000000000,
-        0x804000000000,
-        0x8000000000,
-        0x0,
-        0x804020000000000,
-        0x1008040000000000,
-        0x2010080000000000,
-        0x4020100000000000,
-        0x8040200000000000,
-        0x80400000000000,
-        0x800000000000,
-        0x0,
-        0x402000000000000,
-        0x804000000000000,
-        0x1008000000000000,
-        0x2010000000000000,
-        0x4020000000000000,
-        0x8040000000000000,
-        0x80000000000000,
-        0x0,
-        0x200000000000000,
-        0x400000000000000,
-        0x800000000000000,
-        0x1000000000000000,
-        0x2000000000000000,
-        0x4000000000000000,
-        0x8000000000000000,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0,
-    ],
-    [
-        0xFE,
-        0xFC,
-        0xF8,
-        0xF0,
-        0xE0,
-        0xC0,
-        0x80,
-        0x0,
-        0xFE00,
-        0xFC00,
-        0xF800,
-        0xF000,
-        0xE000,
-        0xC000,
-        0x8000,
-        0x0,
-        0xFE0000,
-        0xFC0000,
-        0xF80000,
-        0xF00000,
-        0xE00000,
-        0xC00000,
-        0x800000,
-        0x0,
-        0xFE000000,
-        0xFC000000,
-        0xF8000000,
-        0xF0000000,
-        0xE0000000,
-        0xC0000000,
-        0x80000000,
-        0x0,
-        0xFE00000000,
-        0xFC00000000,
-        0xF800000000,
-        0xF000000000,
-        0xE000000000,
-        0xC000000000,
-        0x8000000000,
-        0x0,
-        0xFE0000000000,
-        0xFC0000000000,
-        0xF80000000000,
-        0xF00000000000,
-        0xE00000000000,
-        0xC00000000000,
-        0x800000000000,
-        0x0,
-        0xFE000000000000,
-        0xFC000000000000,
-        0xF8000000000000,
-        0xF0000000000000,
-        0xE0000000000000,
-        0xC0000000000000,
-        0x80000000000000,
-        0x0,
-        0xFE00000000000000,
-        0xFC00000000000000,
-        0xF800000000000000,
-        0xF000000000000000,
-        0xE000000000000000,
-        0xC000000000000000,
-        0x8000000000000000,
-        0x0,
-        0,
-    ],
-    [
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x2,
-        0x4,
-        0x8,
-        0x10,
-        0x20,
-        0x40,
-        0x80,
-        0x0,
-        0x204,
-        0x408,
-        0x810,
-        0x1020,
-        0x2040,
-        0x4080,
-        0x8000,
-        0x0,
-        0x20408,
-        0x40810,
-        0x81020,
-        0x102040,
-        0x204080,
-        0x408000,
-        0x800000,
-        0x0,
-        0x2040810,
-        0x4081020,
-        0x8102040,
-        0x10204080,
-        0x20408000,
-        0x40800000,
-        0x80000000,
-        0x0,
-        0x204081020,
-        0x408102040,
-        0x810204080,
-        0x1020408000,
-        0x2040800000,
-        0x4080000000,
-        0x8000000000,
-        0x0,
-        0x20408102040,
-        0x40810204080,
-        0x81020408000,
-        0x102040800000,
-        0x204080000000,
-        0x408000000000,
-        0x800000000000,
-        0x0,
-        0x2040810204080,
-        0x4081020408000,
-        0x8102040800000,
-        0x10204080000000,
-        0x20408000000000,
-        0x40800000000000,
-        0x80000000000000,
-        0x0,
-        0,
-    ],
-    [
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x1,
-        0x2,
-        0x4,
-        0x8,
-        0x10,
-        0x20,
-        0x40,
-        0x80,
-        0x101,
-        0x202,
-        0x404,
-        0x808,
-        0x1010,
-        0x2020,
-        0x4040,
-        0x8080,
-        0x10101,
-        0x20202,
-        0x40404,
-        0x80808,
-        0x101010,
-        0x202020,
-        0x404040,
-        0x808080,
-        0x1010101,
-        0x2020202,
-        0x4040404,
-        0x8080808,
-        0x10101010,
-        0x20202020,
-        0x40404040,
-        0x80808080,
-        0x101010101,
-        0x202020202,
-        0x404040404,
-        0x808080808,
-        0x1010101010,
-        0x2020202020,
-        0x4040404040,
-        0x8080808080,
-        0x10101010101,
-        0x20202020202,
-        0x40404040404,
-        0x80808080808,
-        0x101010101010,
-        0x202020202020,
-        0x404040404040,
-        0x808080808080,
-        0x1010101010101,
-        0x2020202020202,
-        0x4040404040404,
-        0x8080808080808,
-        0x10101010101010,
-        0x20202020202020,
-        0x40404040404040,
-        0x80808080808080,
-        0,
-    ],
-    [
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x0,
-        0x1,
-        0x2,
-        0x4,
-        0x8,
-        0x10,
-        0x20,
-        0x40,
-        0x0,
-        0x100,
-        0x201,
-        0x402,
-        0x804,
-        0x1008,
-        0x2010,
-        0x4020,
-        0x0,
-        0x10000,
-        0x20100,
-        0x40201,
-        0x80402,
-        0x100804,
-        0x201008,
-        0x402010,
-        0x0,
-        0x1000000,
-        0x2010000,
-        0x4020100,
-        0x8040201,
-        0x10080402,
-        0x20100804,
-        0x40201008,
-        0x0,
-        0x100000000,
-        0x201000000,
-        0x402010000,
-        0x804020100,
-        0x1008040201,
-        0x2010080402,
-        0x4020100804,
-        0x0,
-        0x10000000000,
-        0x20100000000,
-        0x40201000000,
-        0x80402010000,
-        0x100804020100,
-        0x201008040201,
-        0x402010080402,
-        0x0,
-        0x1000000000000,
-        0x2010000000000,
-        0x4020100000000,
-        0x8040201000000,
-        0x10080402010000,
-        0x20100804020100,
-        0x40201008040201,
-        0,
-    ],
-    [
-        0x0,
-        0x1,
-        0x3,
-        0x7,
-        0xF,
-        0x1F,
-        0x3F,
-        0x7F,
-        0x0,
-        0x100,
-        0x300,
-        0x700,
-        0xF00,
-        0x1F00,
-        0x3F00,
-        0x7F00,
-        0x0,
-        0x10000,
-        0x30000,
-        0x70000,
-        0xF0000,
-        0x1F0000,
-        0x3F0000,
-        0x7F0000,
-        0x0,
-        0x1000000,
-        0x3000000,
-        0x7000000,
-        0xF000000,
-        0x1F000000,
-        0x3F000000,
-        0x7F000000,
-        0x0,
-        0x100000000,
-        0x300000000,
-        0x700000000,
-        0xF00000000,
-        0x1F00000000,
-        0x3F00000000,
-        0x7F00000000,
-        0x0,
-        0x10000000000,
-        0x30000000000,
-        0x70000000000,
-        0xF0000000000,
-        0x1F0000000000,
-        0x3F0000000000,
-        0x7F0000000000,
-        0x0,
-        0x1000000000000,
-        0x3000000000000,
-        0x7000000000000,
-        0xF000000000000,
-        0x1F000000000000,
-        0x3F000000000000,
-        0x7F000000000000,
-        0x0,
-        0x100000000000000,
-        0x300000000000000,
-        0x700000000000000,
-        0xF00000000000000,
-        0x1F00000000000000,
-        0x3F00000000000000,
-        0x7F00000000000000,
-        0,
-    ],
-];
+        up_left, up, up_right, right, down_right, down, down_left, left,
+    ]
+}
+const fn get_above_below(ray: u64, sq: u64) -> (u64, u64) {
+    (ray & (sq ^ sq.wrapping_neg()), ray & (sq - 1))
+}
+
+const fn gen_vertical() -> ([u64; 65], [u64; 65]) {
+    let mut up = [0; 65];
+    let mut down = [0; 65];
+    let mut i = 0;
+    while i < 64 {
+        (up[i], down[i]) = get_above_below(FILES[i % 8], 1 << i);
+        i += 1;
+    }
+    (up, down)
+}
+
+const fn gen_horizontal() -> ([u64; 65], [u64; 65]) {
+    let mut right = [0; 65];
+    let mut left = [0; 65];
+    let mut i = 0;
+    while i < 64 {
+        (right[i], left[i]) = get_above_below(RANKS[i / 8], 1 << i);
+        i += 1;
+    }
+    (right, left)
+}
+
+// https://www.chessprogramming.org/On_an_empty_Board#Line_Attacks
+const fn gen_pos_diagonal() -> ([u64; 65], [u64; 65]) {
+    const DIAG: u64 = 0x8040201008040201;
+
+    let mut up_right = [0; 65];
+    let mut down_left = [0; 65];
+    let mut i = 0;
+    while i < 64 {
+        let sq = 1u64 << i;
+        let diag = (i as i64 & 7) - (i as i64 >> 3);
+
+        let diagonal = if diag >= 0 {
+            DIAG >> (diag * 8)
+        } else {
+            DIAG << (diag.wrapping_neg() * 8)
+        };
+
+        (up_right[i], down_left[i]) = get_above_below(diagonal, sq);
+        i += 1;
+    }
+    (up_right, down_left)
+}
+
+const fn gen_neg_diagonal() -> ([u64; 65], [u64; 65]) {
+    const DIAG: u64 = 0x0102040810204080;
+
+    let mut up_left = [0; 65];
+    let mut down_right = [0; 65];
+    let mut i = 0;
+    while i < 64 {
+        let sq = 1u64 << i;
+        let diag = 7 - (i as i64 & 7) - (i as i64 >> 3);
+
+        let diagonal = if diag >= 0 {
+            DIAG >> (diag * 8)
+        } else {
+            DIAG << (diag.wrapping_neg() * 8)
+        };
+
+        (up_left[i], down_right[i]) = get_above_below(diagonal, sq);
+        i += 1;
+    }
+    (up_left, down_right)
+}
 
 // all PST are considered from whites perspective
 pub struct PST;
 
 impl PST {
-    pub const fn pst(piece: usize, sq: usize) -> (i16, i16) {
-        let colour = piece & 1;
-        let p = piece / 2;
-        (MID_PST[colour][p][sq], END_PST[colour][p][sq])
+    pub fn pst(piece: usize, sq: usize) -> (i16, i16) {
+        (MID_PST[piece][sq], END_PST[piece][sq])
     }
 }
 
-const MID_PST: [[[i16; 64]; 6]; 2] = [
-    [
-        WPAWN_MID_PST,
-        WKNIGHT_MID_PST,
-        WROOK_MID_PST,
-        WBISHOP_MID_PST,
-        WQUEEN_MID_PST,
-        WKING_MID_PST,
-    ],
-    [
-        BPAWN_MID_PST,
-        BKNIGHT_MID_PST,
-        BROOK_MID_PST,
-        BBISHOP_MID_PST,
-        BQUEEN_MID_PST,
-        BKING_MID_PST,
-    ],
+const MID_PST: [[i16; 64]; 12] = [
+    WPAWN_MID_PST,
+    flip_pst(WPAWN_MID_PST),
+    WKNIGHT_MID_PST,
+    flip_pst(WKNIGHT_MID_PST),
+    WROOK_MID_PST,
+    flip_pst(WROOK_MID_PST),
+    WBISHOP_MID_PST,
+    flip_pst(WBISHOP_MID_PST),
+    WQUEEN_MID_PST,
+    flip_pst(WQUEEN_MID_PST),
+    WKING_MID_PST,
+    flip_pst(WKING_MID_PST),
 ];
 
-const END_PST: [[[i16; 64]; 6]; 2] = [
-    [
-        WPAWN_END_PST,
-        WKNIGHT_END_PST,
-        WROOK_END_PST,
-        WBISHOP_END_PST,
-        WQUEEN_END_PST,
-        WKING_END_PST,
-    ],
-    [
-        BPAWN_END_PST,
-        BKNIGHT_END_PST,
-        BROOK_END_PST,
-        BBISHOP_END_PST,
-        BQUEEN_END_PST,
-        BKING_END_PST,
-    ],
+const END_PST: [[i16; 64]; 12] = [
+    WPAWN_END_PST,
+    flip_pst(WPAWN_END_PST),
+    WKNIGHT_END_PST,
+    flip_pst(WKNIGHT_END_PST),
+    WROOK_END_PST,
+    flip_pst(WROOK_END_PST),
+    WBISHOP_END_PST,
+    flip_pst(WBISHOP_END_PST),
+    WQUEEN_END_PST,
+    flip_pst(WQUEEN_END_PST),
+    WKING_END_PST,
+    flip_pst(WKING_END_PST),
 ];
 
-const fn black_from_whitepst(wpst: [i16; 64]) -> [i16; 64] {
+const fn flip_pst(wpst: [i16; 64]) -> [i16; 64] {
     let mut bpst = [0; 64];
 
     let mut i = 0;
@@ -691,7 +193,7 @@ const fn black_from_whitepst(wpst: [i16; 64]) -> [i16; 64] {
 
         let idx = (7 - i_rank) * 8 + i_file;
 
-        bpst[idx] = wpst[i] * -1;
+        bpst[idx] = wpst[i];
 
         i += 1;
     }
@@ -705,23 +207,17 @@ const WPAWN_MID_PST: [i16; 64] = [
     -20, 98, 134, 61, 95, 68, 126, 34, -11, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-const BPAWN_MID_PST: [i16; 64] = black_from_whitepst(WPAWN_MID_PST);
-
 const WPAWN_END_PST: [i16; 64] = [
     0, 0, 0, 0, 0, 0, 0, 0, 13, 8, 8, 10, 13, 0, 2, -7, 4, 7, -6, 1, 0, -5, -1, -8, 13, 9, -3, -7,
     -7, -8, 3, -1, 32, 24, 13, 5, -2, 4, 17, 17, 94, 100, 85, 67, 56, 53, 82, 84, 178, 173, 158,
     134, 147, 132, 165, 187, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-const BPAWN_END_PST: [i16; 64] = black_from_whitepst(WPAWN_END_PST);
-
 const WKNIGHT_MID_PST: [i16; 64] = [
     -105, -21, -58, -33, -17, -28, -19, -23, -29, -53, -12, -3, -1, 18, -14, -19, -23, -9, 12, 10,
     19, 17, 25, -16, -13, 4, 16, 13, 28, 19, 21, -8, -9, 17, 19, 53, 37, 69, 18, 22, -47, 60, 37,
     65, 84, 129, 73, 44, -73, -41, 72, 36, 23, 62, 7, -17, -167, -89, -34, -49, 61, -97, -15, -107,
 ];
-
-const BKNIGHT_MID_PST: [i16; 64] = black_from_whitepst(WKNIGHT_MID_PST);
 
 const WKNIGHT_END_PST: [i16; 64] = [
     -29, -51, -23, -15, -22, -18, -50, -64, -42, -20, -10, -5, -2, -20, -23, -44, -23, -3, -1, 15,
@@ -730,15 +226,11 @@ const WKNIGHT_END_PST: [i16; 64] = [
     -63, -99,
 ];
 
-const BKNIGHT_END_PST: [i16; 64] = black_from_whitepst(WKNIGHT_END_PST);
-
 const WBISHOP_MID_PST: [i16; 64] = [
     -33, -3, -14, -21, -13, -12, -39, -21, 4, 15, 16, 0, 7, 21, 33, 1, 0, 15, 15, 15, 14, 27, 18,
     10, -6, 13, 13, 26, 34, 12, 10, 4, -4, 5, 19, 50, 37, 37, 7, -2, -16, 37, 43, 40, 35, 50, 37,
     -2, -26, 16, -18, -13, 30, 59, 18, -47, -29, 4, -82, -37, -25, -42, 7, -8,
 ];
-
-const BBISHOP_MID_PST: [i16; 64] = black_from_whitepst(WBISHOP_MID_PST);
 
 const WBISHOP_END_PST: [i16; 64] = [
     -23, -9, -23, -5, -9, -16, -5, -17, -14, -18, -7, -1, 4, -9, -15, -27, -12, -3, 8, 10, 13, 3,
@@ -746,15 +238,11 @@ const WBISHOP_END_PST: [i16; 64] = [
     -8, -4, 7, -12, -3, -13, -4, -14, -14, -21, -11, -8, -7, -9, -17, -24,
 ];
 
-const BBISHOP_END_PST: [i16; 64] = black_from_whitepst(WBISHOP_END_PST);
-
 const WROOK_MID_PST: [i16; 64] = [
     -19, -13, 1, 17, 16, 7, -37, -26, -44, -16, -20, -9, -1, 11, -6, -71, -45, -25, -16, -17, 3, 0,
     -5, -33, -36, -26, -12, -1, 9, -7, 6, -23, -24, -11, 7, 26, 24, 35, -8, -20, -5, 19, 26, 36,
     17, 45, 61, 16, 27, 32, 58, 62, 80, 67, 26, 44, 32, 42, 32, 51, 63, 9, 31, 43,
 ];
-
-const BROOK_MID_PST: [i16; 64] = black_from_whitepst(WROOK_MID_PST);
 
 const WROOK_END_PST: [i16; 64] = [
     -9, 2, 3, -1, -5, -13, 4, -20, -6, -6, 0, 2, -9, -9, -11, -3, -4, 0, -5, -1, -7, -12, -8, -16,
@@ -762,23 +250,17 @@ const WROOK_END_PST: [i16; 64] = [
     11, -3, 3, 8, 3, 13, 10, 18, 15, 12, 12, 8, 5,
 ];
 
-const BROOK_END_PST: [i16; 64] = black_from_whitepst(WROOK_END_PST);
-
 const WQUEEN_MID_PST: [i16; 64] = [
     -1, -18, -9, 10, -15, -25, -31, -50, -35, -8, 11, 2, 8, 15, -3, 1, -14, 2, -11, -2, -5, 2, 14,
     5, -9, -26, -9, -10, -2, -4, 3, -3, -27, -27, -16, -16, -1, 17, -2, 1, -13, -17, 7, 8, 29, 56,
     47, 57, -24, -39, -5, 1, -16, 57, 28, 54, -28, 0, 29, 12, 59, 44, 43, 45,
 ];
 
-const BQUEEN_MID_PST: [i16; 64] = black_from_whitepst(WQUEEN_MID_PST);
-
 const WQUEEN_END_PST: [i16; 64] = [
     -33, -28, -22, -43, -5, -32, -20, -41, -22, -23, -30, -16, -16, -23, -36, -32, -16, -27, 15, 6,
     9, 17, 10, 5, -18, 28, 19, 47, 31, 34, 39, 23, 3, 22, 24, 45, 57, 40, 57, 36, -20, 6, 9, 49,
     47, 35, 19, 9, -17, 20, 32, 41, 58, 25, 30, 0, -9, 22, 22, 27, 27, 19, 10, 20,
 ];
-
-const BQUEEN_END_PST: [i16; 64] = black_from_whitepst(WQUEEN_END_PST);
 
 const WKING_MID_PST: [i16; 64] = [
     -15, 36, 12, -54, 8, -28, 24, 14, 1, 7, -8, -64, -43, -16, 9, 8, -14, -14, -22, -46, -44, -30,
@@ -787,12 +269,216 @@ const WKING_MID_PST: [i16; 64] = [
     13,
 ];
 
-const BKING_MID_PST: [i16; 64] = black_from_whitepst(WKING_MID_PST);
-
 const WKING_END_PST: [i16; 64] = [
     -53, -34, -21, -11, -28, -14, -24, -43, -27, -11, 4, 13, 14, 4, -5, -17, -19, -3, 11, 21, 23,
     16, 7, -9, -18, -4, 21, 24, 27, 23, 9, -11, -8, 22, 24, 27, 26, 33, 26, 3, 10, 17, 23, 15, 20,
     45, 44, 13, -12, 17, 14, 17, 17, 38, 23, 11, -74, -35, -18, -18, -11, 15, 4, -17,
 ];
 
-const BKING_END_PST: [i16; 64] = black_from_whitepst(WKING_END_PST);
+static PAWN_ATTACKS: [u64; 128] = gen_pawn_attack_table();
+static KNIGHT_MOVES: [u64; 64] = gen_knight_move_table();
+static KING_MOVES: [u64; 64] = gen_king_move_table();
+static SUPERRAYS: [u64; 64] = gen_superray();
+static mut ROOK_MOVES: [[u64; 4096]; 64] = [[0; 4096]; 64];
+static mut BISHOP_MOVES: [[u64; 512]; 64] = [[0; 512]; 64];
+
+pub struct MT;
+
+impl MT {
+    pub fn init() {
+        unsafe {
+            ROOK_MOVES = gen_rook_move_table();
+            BISHOP_MOVES = gen_bishop_move_table();
+        }
+    }
+
+    #[inline]
+    pub fn pawn_attacks(colour: usize, sq: usize) -> u64 {
+        PAWN_ATTACKS[sq + colour * 64]
+    }
+
+    #[inline]
+    pub fn knight_moves(sq: usize) -> u64 {
+        KNIGHT_MOVES[sq]
+    }
+
+    #[inline]
+    pub fn king_moves(sq: usize) -> u64 {
+        KING_MOVES[sq]
+    }
+
+    #[inline]
+    pub fn rook_moves(mut occ: u64, sq: usize) -> u64 {
+        occ &= ROOK_MASK[sq];
+        occ = occ.wrapping_mul(ROOK_MAGIC[sq]);
+        occ >>= 64 - R_BIT;
+        unsafe { ROOK_MOVES[sq][occ as usize] }
+    }
+
+    #[inline]
+    pub fn rook_xray_moves(occ: u64, mut blockers: u64, sq: usize) -> u64 {
+        let attacks = Self::rook_moves(occ, sq);
+        blockers &= attacks;
+        attacks ^ Self::rook_moves(occ ^ blockers, sq)
+    }
+
+    #[inline]
+    pub fn bishop_moves(mut occ: u64, sq: usize) -> u64 {
+        occ &= BISHOP_MASK[sq];
+        occ = occ.wrapping_mul(BISHOP_MAGIC[sq]);
+        occ >>= 64 - B_BIT;
+        unsafe { BISHOP_MOVES[sq][occ as usize] }
+    }
+
+    #[inline]
+    pub fn bishop_xray_moves(occ: u64, mut blockers: u64, sq: usize) -> u64 {
+        let attacks = Self::bishop_moves(occ, sq);
+        blockers &= attacks;
+        attacks ^ Self::bishop_moves(occ ^ blockers, sq)
+    }
+
+    #[inline]
+    pub fn rays(dir: usize, sq: usize) -> u64 {
+        RAYS::get(dir, sq)
+    }
+
+    #[inline]
+    pub fn superrays(sq: usize) -> u64 {
+        unsafe { *SUPERRAYS.get_unchecked(sq) }
+    }
+}
+
+const fn gen_pawn_attack_table() -> [u64; 128] {
+    let mut pawn_attacks = [0; 64 * 2];
+
+    let mut i = 0;
+    while i < 64 {
+        let sq = SQUARES[i];
+        //white
+        if sq & !R8 > 0 {
+            pawn_attacks[i] = (sq & !FA) << 7 | (sq & !FH) << 9;
+        }
+
+        //black
+        if sq & !R1 > 0 {
+            pawn_attacks[i + 64] = (sq & !FH) >> 7 | (sq & !FA) >> 9;
+        }
+
+        i += 1;
+    }
+
+    pawn_attacks
+}
+
+const fn gen_knight_move_table() -> [u64; 64] {
+    let mut knight_moves = [0; 64];
+
+    let mut i = 0;
+    while i < 64 {
+        let mut mv = 0;
+        mv |= (SQUARES[i] & !FA & !FB) << 6;
+        mv |= (SQUARES[i] & !FA) << 15;
+        mv |= (SQUARES[i] & !FH) << 17;
+        mv |= (SQUARES[i] & !FG & !FH) << 10;
+
+        mv |= (SQUARES[i] & !FH & !FG) >> 6;
+        mv |= (SQUARES[i] & !FH) >> 15;
+        mv |= (SQUARES[i] & !FA) >> 17;
+        mv |= (SQUARES[i] & !FA & !FB) >> 10;
+
+        knight_moves[i] = mv;
+        i += 1;
+    }
+
+    knight_moves
+}
+
+const fn gen_king_move_table() -> [u64; 64] {
+    let mut king_moves = [0; 64];
+
+    let mut i = 0;
+    while i < 64 {
+        let mut mv = 0;
+        let k_clear_a = SQUARES[i] & !FA;
+        let k_clear_h = SQUARES[i] & !FH;
+
+        mv |= SQUARES[i] << 8;
+        mv |= SQUARES[i] >> 8;
+        mv |= k_clear_a << 7;
+        mv |= k_clear_a >> 1;
+        mv |= k_clear_a >> 9;
+        mv |= k_clear_h << 9;
+        mv |= k_clear_h << 1;
+        mv |= k_clear_h >> 7;
+
+        king_moves[i] = mv;
+        i += 1;
+    }
+
+    king_moves
+}
+
+fn gen_rook_move_table() -> [[u64; 4096]; 64] {
+    let mut rook_moves = [[0; 4096]; 64];
+    let mut sq = 0;
+    while sq < 64 {
+        let mut blocker_idx = 0;
+        while blocker_idx < (1 << R_BIT) {
+            // add rook moves
+            let blockers = index_to_u64(
+                blocker_idx,
+                ROOK_MASK[sq].count_ones() as i32,
+                ROOK_MASK[sq],
+            );
+
+            rook_moves[sq][((blockers.wrapping_mul(ROOK_MAGIC[sq])) >> (64 - R_BIT)) as usize] =
+                ratt(sq as i32, blockers);
+
+            blocker_idx += 1;
+        }
+        sq += 1;
+    }
+
+    rook_moves
+}
+
+fn gen_bishop_move_table() -> [[u64; 512]; 64] {
+    let mut bishop_moves = [[0; 512]; 64];
+    let mut sq = 0;
+    while sq < 64 {
+        let mut blocker_idx = 0;
+        while blocker_idx < (1 << B_BIT) {
+            let blockers = index_to_u64(
+                blocker_idx,
+                BISHOP_MASK[sq].count_ones() as i32,
+                BISHOP_MASK[sq],
+            );
+
+            bishop_moves[sq]
+                [((blockers.wrapping_mul(BISHOP_MAGIC[sq])) >> (64 - B_BIT)) as usize] =
+                batt(sq as i32, blockers);
+            blocker_idx += 1;
+        }
+        sq += 1;
+    }
+
+    bishop_moves
+}
+
+const fn gen_superray() -> [u64; 64] {
+    let mut superray = [0; 64];
+    let mut sq = 0;
+    while sq < 64 {
+        superray[sq] = RAYS::get(0, sq)
+            | RAYS::get(1, sq)
+            | RAYS::get(2, sq)
+            | RAYS::get(3, sq)
+            | RAYS::get(4, sq)
+            | RAYS::get(5, sq)
+            | RAYS::get(6, sq)
+            | RAYS::get(7, sq);
+        sq += 1;
+    }
+
+    superray
+}

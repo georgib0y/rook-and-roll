@@ -1,10 +1,9 @@
-use crate::board::board::{Board, WHITE};
+use crate::board::{Board, WHITE};
 use crate::movegen::moves::{KillerMoves, Move, PrevMoves, NULL_MOVE};
-use crate::search::hh::HistoryTable;
-use crate::search::search::search::root_pvs;
-use crate::search::search::{SeachResult, SearchError, Searcher, MAX_DEPTH, MIN_SCORE};
-use crate::search::tt::smp_tt::SmpTTable;
-use crate::search::tt::EntryType;
+use crate::search::search::root_pvs;
+use crate::search::searchers::{SeachResult, SearchError, Searcher, MAX_DEPTH, MIN_SCORE};
+use crate::search::tt::{EntryScore, SmpTTable};
+use crate::search::HistoryTable;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -105,6 +104,7 @@ impl<'a> LazySmp<'a> {
 
 struct SmpSearcher {
     abort: Arc<AtomicBool>,
+    root_depth: i32,
     ply: i32,
     colour_mul: i32,
     tt: Arc<SmpTTable>,
@@ -117,6 +117,7 @@ impl SmpSearcher {
     pub fn new(abort: Arc<AtomicBool>, tt: Arc<SmpTTable>, prev_moves: PrevMoves) -> SmpSearcher {
         SmpSearcher {
             abort,
+            root_depth: 0,
             ply: 0,
             colour_mul: 0,
             tt,
@@ -128,29 +129,24 @@ impl SmpSearcher {
 }
 
 impl Searcher for SmpSearcher {
-    fn init_search(&mut self, b: &Board) {
+    fn init_search(&mut self, b: &Board, depth: usize) {
         self.colour_mul = if b.ctm() == WHITE { 1 } else { -1 };
         self.ply = 0;
+        self.root_depth = depth as i32;
     }
 
     fn has_aborted(&self) -> bool {
         self.abort.load(Ordering::SeqCst)
     }
 
-    fn probe_tt(&self, hash: u64, alpha: i32, beta: i32, depth: usize) -> Option<i32> {
-        self.tt.get_score(hash, depth, alpha, beta, self.ply)
+    fn probe_tt(&self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
+        // self.tt.get_score(hash, self., alpha, beta, self.ply)
+        None
     }
 
-    fn store_tt(
-        &mut self,
-        hash: u64,
-        score: i32,
-        entry_type: EntryType,
-        depth: usize,
-        best_move: Option<Move>,
-    ) {
-        self.tt
-            .insert(hash, score, entry_type, depth, best_move, self.ply as usize);
+    fn store_tt(&mut self, hash: u64, score: EntryScore, best_move: Option<Move>) {
+        // self.tt
+        //     .insert(hash, score, entry_type, depth, best_move, self.ply as usize);
     }
 
     fn get_tt_best_move(&self, hash: u64) -> Option<Move> {
@@ -171,6 +167,10 @@ impl Searcher for SmpSearcher {
 
     fn ply(&self) -> i32 {
         self.ply
+    }
+
+    fn draft(&self) -> i32 {
+        self.root_depth - self.ply
     }
 
     fn colour_multiplier(&self) -> i32 {

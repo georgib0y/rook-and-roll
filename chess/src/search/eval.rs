@@ -1,12 +1,10 @@
-use crate::board::board::{Board, BLACK, WHITE};
+use crate::board::{Board, BLACK, WHITE};
 use crate::movegen::move_info::PST;
 use std::cmp::max;
 
 pub const CHECKMATE: i32 = -1000000000;
 pub const MATED: i32 = -CHECKMATE;
-
 pub const STALEMATE: i32 = 0;
-
 pub const PAWN_VALUE: i32 = 100;
 const KNIGHT_VALUE: i32 = 325;
 const ROOK_VALUE: i32 = 500;
