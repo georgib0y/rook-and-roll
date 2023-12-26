@@ -8,11 +8,17 @@ pub struct HistoryTable {
     history: Box<[[[u32; 64]; 64]; 2]>,
 }
 
-impl HistoryTable {
-    pub fn new() -> HistoryTable {
+impl Default for HistoryTable {
+    fn default() -> Self {
         HistoryTable {
             history: Box::new([[[0; 64]; 64]; 2]),
         }
+    }
+}
+
+impl HistoryTable {
+    pub fn new() -> HistoryTable {
+        HistoryTable::default()
     }
 
     pub fn insert(&mut self, ctm: usize, from: usize, to: usize, depth: usize) {

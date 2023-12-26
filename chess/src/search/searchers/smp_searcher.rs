@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::board::{Board, WHITE};
 use crate::movegen::moves::{KillerMoves, Move, PrevMoves, NULL_MOVE};
 use crate::search::search::root_pvs;
@@ -87,7 +89,7 @@ impl<'a> LazySmp<'a> {
 
             res = Some(root_pvs(
                 &mut self.searcher,
-                &self.board,
+                self.board,
                 alpha_window,
                 beta_window,
                 depth,
@@ -205,5 +207,9 @@ impl Searcher for SmpSearcher {
 
     fn store_hh_score(&mut self, ctm: usize, from: usize, to: usize, depth: usize) {
         self.hh.insert(ctm, from, to, depth)
+    }
+
+    fn add_node(&mut self) {
+        todo!()
     }
 }

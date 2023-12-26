@@ -52,4 +52,5 @@ pub trait Searcher {
     fn pop_prev_move(&mut self, hash: u64);
     fn get_hh_score(&self, ctm: usize, from: usize, to: usize) -> u32;
     fn store_hh_score(&mut self, ctm: usize, from: usize, to: usize, depth: usize);
+    fn add_node(&mut self);
 }

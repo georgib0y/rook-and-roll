@@ -1,5 +1,5 @@
 use crate::game_state::UciGameState;
-use chess::board::board::Board;
+use chess::board::Board;
 use chess::movegen::moves::PrevMoves;
 use chess::search::searchers::single_searcher::iterative_deepening;
 use chess::search::searchers::SeachResult;

@@ -279,11 +279,17 @@ pub struct PrevMoves {
     prev: Box<[u8; PREV_MOVE_SIZE]>,
 }
 
-impl PrevMoves {
-    pub fn new() -> PrevMoves {
+impl Default for PrevMoves {
+    fn default() -> Self {
         PrevMoves {
             prev: Box::new([0; PREV_MOVE_SIZE]),
         }
+    }
+}
+
+impl PrevMoves {
+    pub fn new() -> PrevMoves {
+        PrevMoves::default()
     }
 
     pub fn add(&mut self, hash: u64) {

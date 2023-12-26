@@ -1,20 +1,16 @@
 // use crate::game_state::game_state_mt::GameStateMT;
 use crate::game_state::game_state_st::GameStateST;
 use crate::uci::{Uci, UciWriter};
-use chess::board::board::Board;
+use chess::board::Board;
 use chess::movegen::moves::PrevMoves;
-use chess::perft::Perft;
+use chess::perft::{HashPerft, Perft};
 use chess::search::searchers::single_searcher::iterative_deepening;
 use chess::search::tt::TTable;
 use std::env::args;
 use std::time::Instant;
 
-// mod game_state;
 mod game_state;
 pub mod uci;
-
-const SEARCH: bool = false;
-const PERFT: bool = true;
 
 fn main() {
     chess::init();
@@ -24,14 +20,16 @@ fn main() {
         return;
     }
 
-    if SEARCH {
-        _do_search();
-        return;
-    }
-
-    if PERFT {
-        _do_perft();
-        return;
+    match option_env!("MODE").unwrap_or("") {
+        "search" => {
+            _do_search();
+            return;
+        }
+        "perft" => {
+            _do_perft();
+            return;
+        }
+        _ => {}
     }
 
     let mut uci = Uci::new(GameStateST::new());
@@ -41,7 +39,7 @@ fn main() {
 }
 
 fn _do_perft() {
-    let perfts = vec![
+    let perfts: Vec<(usize, usize, Board)> = vec![
         // (7, 3195901860usize, Board::new()),
         // (
         //     6,
@@ -79,27 +77,56 @@ fn _do_perft() {
         //     )
         //     .unwrap(),
         // ),
-        (1, 119060324, Board::new()),
-        (2, 119060324, Board::new()),
-        (3, 119060324, Board::new()),
-        (4, 119060324, Board::new()),
-        (5, 119060324, Board::new()),
+        (1, 20, Board::new()),
+        (2, 400, Board::new()),
+        (3, 8902, Board::new()),
+        (4, 197281, Board::new()),
+        (5, 4865609, Board::new()),
         (6, 119060324, Board::new()),
+        (7, 3195901860, Board::new()),
     ];
 
-    for (depth, moves, b) in perfts {
+    // for (depth, moves, b) in &perfts {
+    //     let mut perft = Perft::new();
+    //     let start = Instant::now();
+
+    //     perft.perft(b, *depth);
+    //     let stop = start.elapsed();
+    //     println!(
+    //         "Depth: {depth}\t\tMoves (Expected): {} ({})\t\tTime: {}ms",
+    //         perft.mc,
+    //         moves,
+    //         stop.as_millis()
+    //     );
+
+    //     // assert_eq!(perft.mc, moves)
+    // }
+
+    // println!();
+
+    for (depth, moves, b) in &perfts {
+        let mut perft = HashPerft::new();
         let start = Instant::now();
 
-        let mut perft = Perft::new();
-
-        perft.perft(&b, depth);
+        let mc = perft.perft(b, *depth as u64);
         let stop = start.elapsed();
         println!(
             "Depth: {depth}\t\tMoves (Expected): {} ({})\t\tTime: {}ms",
-            perft.mc,
+            mc,
             moves,
             stop.as_millis()
         );
+
+        // let start = Instant::now();
+
+        // let mc = perft.perft(b, *depth as u64);
+        // let stop = start.elapsed();
+        // println!(
+        //     "Depth: {depth}\t\tMoves (Expected): {} ({})\t\tTime: {}ms",
+        //     mc,
+        //     moves,
+        //     stop.as_millis()
+        // );
 
         // assert_eq!(perft.mc, moves)
     }
@@ -110,7 +137,16 @@ fn _do_search() {
     let mut tt = TTable::new();
     let mut prev_moves = PrevMoves::new();
     let mut out = UciWriter::new();
-    iterative_deepening(&b, &mut tt, &mut prev_moves, &mut out).unwrap();
+
+    let start = Instant::now();
+
+    let res = iterative_deepening(&b, &mut tt, &mut prev_moves, &mut out).unwrap();
+    println!(
+        "bestmove: {} with score {}, took {}ms",
+        res.1.as_uci_string(),
+        res.0,
+        start.elapsed().as_millis()
+    )
 }
 
 fn do_perftree() {
@@ -119,6 +155,7 @@ fn do_perftree() {
     let fen = &args[2];
     let moves: Option<&String> = args.get(3);
 
-    let perft = Perft::new();
+    // let perft = Perft::new();
+    let mut perft = HashPerft::new();
     perft.perftree_root(depth, fen, moves);
 }

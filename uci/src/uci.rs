@@ -1,6 +1,6 @@
 use crate::game_state::UciGameState;
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, UciNewGame};
-use chess::board::board::Board;
+use chess::board::Board;
 use chess::movegen::moves::{Move, PrevMoves};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -8,8 +8,8 @@ use std::fs::File;
 use std::io::{BufRead, LineWriter, Stdout, Write};
 use std::{io, process};
 
-const AUTHOR: &'static str = "George";
-const BOT_NAME: &'static str = "Rustinator: Rook and Rool";
+const AUTHOR: &str = "George";
+const BOT_NAME: &str = "RookNRoll";
 
 pub struct UciPositionCommand {
     fen: Option<String>,
@@ -199,7 +199,7 @@ impl<T: UciGameState> Uci<T> {
         let best_move = match self.game_state.go(&mut self.uci_writer_out) {
             Ok((_, best_move)) => best_move,
             Err(err) => {
-                writeln!(&mut self.uci_writer_out, "Could not get best move: {err}");
+                writeln!(&mut self.uci_writer_out, "Could not get best move: {err}").unwrap();
                 return;
             }
         };
@@ -219,7 +219,7 @@ pub struct UciWriter {
 }
 
 //TODO change this to env variable
-const LOG_DIR: &'static str = "/home/george/Nextcloud/progs/rookandroll/logs";
+const LOG_DIR: &str = "/home/george/Nextcloud/progs/rookandroll/logs";
 
 impl UciWriter {
     pub fn new() -> UciWriter {

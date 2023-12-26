@@ -4,13 +4,14 @@ use crate::search::eval::PAWN_VALUE;
 use crate::search::search::root_pvs;
 use crate::search::searchers::{SeachResult, SearchError, Searcher, MAX_SCORE};
 use crate::search::searchers::{MAX_DEPTH, MIN_SCORE};
-use crate::search::tt::EntryScore;
 use crate::search::tt::TTable;
+use crate::search::tt::{EntryScore, TTABLE_SIZE};
 use crate::search::HistoryTable;
 use std::cmp::{max, min};
 use std::io::Write;
 use std::time::Instant;
 
+// const TIME_LIMIT_MS: u128 = 100000;
 const TIME_LIMIT_MS: u128 = 1500;
 
 pub fn iterative_deepening(
@@ -26,6 +27,7 @@ pub fn iterative_deepening(
     let mut best_result: (i32, Move) = (MIN_SCORE, NULL_MOVE);
 
     for depth in 1..MAX_DEPTH {
+        // for depth in 1..8 {
         if start.elapsed().as_millis() > TIME_LIMIT_MS {
             searcher.abort();
             break;
@@ -45,26 +47,61 @@ pub fn iterative_deepening(
             .tt
             .get_full_pv(board)
             .iter()
-            .fold(String::new(), |pv, m| pv.add(&m.as_uci_string()).add(" "));
+            .fold(String::new(), |pv, m| pv + &m.as_uci_string() + " ");
 
-        if start.elapsed().as_millis() > 0 {
-            writeln!(out, "info depth {} score cp {} pv {}", depth, res.0, pv_str).unwrap();
+        // if start.elapsed().as_millis() > 0 {
+        if true {
+            let nps = searcher.nodes as f64 / start.elapsed().as_secs_f64();
+            writeln!(
+                out,
+                "info depth {} score cp {} nps {:.0} pv {}",
+                depth, res.0, nps, pv_str
+            )
+            .unwrap();
 
-            let hits = searcher.tt.hits();
-            let collisions = searcher.tt.collisions();
-            let misses = searcher.tt.misses();
-            let total = hits + misses + collisions;
-            let percent = (hits as f64 / total as f64) * 100.0;
-            println!(
-                "{} hits, {} collisions, {} misses, {} total, {}%",
-                hits, collisions, misses, total, percent
-            );
+            // print_stats(&searcher)
         }
 
         best_result = res;
     }
 
     Ok(best_result)
+}
+
+fn print_stats(searcher: &SingleSearcher) {
+    let (hits, misses, cols, inserts, new_inserts, count) = searcher.tt.stats();
+
+    let total = hits + misses + cols;
+    let percent = (hits as f64 / total as f64) * 100.0;
+    let capacity = (count as f64 / TTABLE_SIZE as f64) * 100.0;
+    let occ_nodes = (count as f64 / searcher.nodes as f64) * 100.0;
+    let occ_inserts = (count as f64 / inserts as f64) * 100.0;
+    println!(
+        "{} hits, \
+                {} collisions, \
+                {} misses, \
+                {} total gets, \
+                {} inserts, \
+                {} new inserts, \
+                hit/miss+coll {:.2}%, \
+                nodes {}, \
+                tt occupied {}, \
+                tt capacity {:.2}%, \
+                occ/nodes {:.2}%, \
+                occ/inserts {:.2}%",
+        hits,
+        cols,
+        misses,
+        total,
+        inserts,
+        new_inserts,
+        percent,
+        searcher.nodes,
+        count,
+        capacity,
+        occ_nodes,
+        occ_inserts
+    );
 }
 
 fn root_search(s: &mut SingleSearcher, b: &Board, best_score: i32, depth: usize) -> SeachResult {
@@ -116,6 +153,7 @@ struct SingleSearcher<'a> {
     km: KillerMoves,
     hh: HistoryTable,
     prev_moves: &'a mut PrevMoves,
+    nodes: usize,
 }
 
 impl<'a> SingleSearcher<'a> {
@@ -129,6 +167,7 @@ impl<'a> SingleSearcher<'a> {
             km: KillerMoves::new(),
             hh: HistoryTable::new(),
             prev_moves,
+            nodes: 0,
         }
     }
 
@@ -142,6 +181,7 @@ impl<'a> Searcher for SingleSearcher<'a> {
         self.colour_multiplier = if b.ctm() == WHITE { 1 } else { -1 };
         self.ply = 0;
         self.root_depth = depth as i32;
+        self.nodes = 0;
     }
 
     fn has_aborted(&self) -> bool {
@@ -163,7 +203,7 @@ impl<'a> Searcher for SingleSearcher<'a> {
     }
 
     fn get_tt_pv_move(&mut self, hash: u64) -> Option<Move> {
-        self.tt.get_bestmove(hash)
+        self.tt.get_pv(hash)
         // None
     }
 
@@ -215,5 +255,9 @@ impl<'a> Searcher for SingleSearcher<'a> {
 
     fn store_hh_score(&mut self, ctm: usize, from: usize, to: usize, depth: usize) {
         self.hh.insert(ctm, from, to, depth)
+    }
+
+    fn add_node(&mut self) {
+        self.nodes += 1;
     }
 }

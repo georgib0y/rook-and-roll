@@ -25,6 +25,7 @@ pub fn root_pvs(
 
     let mut best_move = None;
     let mut best_score = MIN_SCORE;
+    let mut tt_score = Alpha(alpha);
 
     for m in ml {
         let Some(score) = try_move(s, b, m, alpha, beta, depth) else {
@@ -35,17 +36,16 @@ pub fn root_pvs(
             best_score = score;
             best_move = Some(m);
             alpha = score;
+            tt_score = PV(alpha);
         }
 
         if score >= beta {
             beta_cuttoff(s, b, m, beta, depth);
             return Ok((best_score, best_move.ok_or(SearchError::FailHigh)?));
         }
-
-        s.store_tt(b.hash(), Alpha(alpha), best_move);
     }
 
-    s.store_tt(b.hash(), PV(alpha), best_move);
+    s.store_tt(b.hash(), tt_score, best_move);
     Ok((best_score, best_move.ok_or(SearchError::FailLow)?))
 }
 
@@ -54,15 +54,17 @@ fn pvs(s: &mut impl Searcher, b: &Board, mut alpha: i32, beta: i32, depth: usize
         return MIN_SCORE;
     }
 
-    // probe tt
-    if let Some(score) = s.probe_tt(b.hash(), alpha, beta) {
-        return score;
-    }
+    s.add_node();
 
     if depth == 0 {
         let q_score = quiesce(s, b, alpha, beta);
         s.store_tt(b.hash(), PV(q_score), None);
         return q_score;
+    }
+
+    // probe tt
+    if let Some(score) = s.probe_tt(b.hash(), alpha, beta) {
+        return score;
     }
 
     let in_check = is_in_check(b);
@@ -77,7 +79,7 @@ fn pvs(s: &mut impl Searcher, b: &Board, mut alpha: i32, beta: i32, depth: usize
 
     for m in ml {
         let score = if found_pv {
-            let Some(mut score) = try_non_pv_move(s, b, m, alpha, depth) else {
+            let Some(mut score) = try_move(s, b, m, alpha + 1, alpha, depth) else {
                 continue;
             };
 
@@ -138,31 +140,8 @@ fn try_move(
     Some(score)
 }
 
-fn try_non_pv_move(
-    s: &mut impl Searcher,
-    board: &Board,
-    m: Move,
-    alpha: i32,
-    depth: usize,
-) -> Option<i32> {
-    let b = board.copy_make(m);
-
-    if !is_legal_move(&b, m, s.prev_moves()) || moved_into_check(&b, m) {
-        return None;
-    }
-
-    s.push_ply();
-    s.push_prev_move(b.hash());
-
-    let score = -pvs(s, &b, -alpha - 1, -alpha, depth - 1);
-
-    s.pop_ply();
-    s.pop_prev_move(b.hash());
-
-    Some(score)
-}
-
 fn beta_cuttoff(s: &mut impl Searcher, b: &Board, m: Move, beta: i32, depth: usize) {
+    //dbg!("storing beta cutoff", b.hash(), beta, m.as_uci_string());
     s.store_tt(b.hash(), Beta(beta), Some(m));
 
     if m.move_type() == MoveType::Quiet {
@@ -180,9 +159,11 @@ fn update_alpha_checkmate_score(
 ) {
     if is_in_check && !has_moved {
         *alpha = CHECKMATE + s.ply();
+        //dbg!("found checkmate", *alpha, is_in_check, has_moved);
         *entry_score = PV(*alpha);
     } else if !has_moved {
         *alpha = STALEMATE;
+        //dbg!("found stalemate", *alpha, is_in_check, has_moved);
         *entry_score = PV(*alpha);
     }
 }
@@ -196,15 +177,19 @@ pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) 
         let eval = eval(board, s.colour_multiplier());
 
         if eval >= beta {
+            //dbg!("eval >= beta", eval, beta);
             return beta;
         }
 
         if alpha < eval {
+            //dbg!("alpha < eval", alpha, eval);
             alpha = eval;
         }
 
         eval
     };
+
+    //dbg!("quiesce eval", eval);
 
     let mut ml = ScoredMoveList::<_, MAX_MOVES>::new(board, s, 0);
     if in_check {
@@ -217,6 +202,7 @@ pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) 
     for m in ml {
         if m.xpiece() >= KING as u32 {
             return MATED - s.ply();
+            // return beta;
         }
 
         let Some(score) = try_move_quiesce(s, board, m, alpha, beta, eval) else {

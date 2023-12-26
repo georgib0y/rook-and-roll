@@ -193,7 +193,7 @@ const fn flip_pst(wpst: [i16; 64]) -> [i16; 64] {
 
         let idx = (7 - i_rank) * 8 + i_file;
 
-        bpst[idx] = wpst[i];
+        bpst[idx] = -wpst[i];
 
         i += 1;
     }
@@ -286,10 +286,8 @@ pub struct MT;
 
 impl MT {
     pub fn init() {
-        unsafe {
-            ROOK_MOVES = gen_rook_move_table();
-            BISHOP_MOVES = gen_bishop_move_table();
-        }
+        gen_rook_move_table();
+        gen_bishop_move_table();
     }
 
     #[inline]
@@ -418,8 +416,7 @@ const fn gen_king_move_table() -> [u64; 64] {
     king_moves
 }
 
-fn gen_rook_move_table() -> [[u64; 4096]; 64] {
-    let mut rook_moves = [[0; 4096]; 64];
+fn gen_rook_move_table() {
     let mut sq = 0;
     while sq < 64 {
         let mut blocker_idx = 0;
@@ -431,19 +428,19 @@ fn gen_rook_move_table() -> [[u64; 4096]; 64] {
                 ROOK_MASK[sq],
             );
 
-            rook_moves[sq][((blockers.wrapping_mul(ROOK_MAGIC[sq])) >> (64 - R_BIT)) as usize] =
-                ratt(sq as i32, blockers);
+            unsafe {
+                ROOK_MOVES[sq]
+                    [((blockers.wrapping_mul(ROOK_MAGIC[sq])) >> (64 - R_BIT)) as usize] =
+                    ratt(sq as i32, blockers);
+            }
 
             blocker_idx += 1;
         }
         sq += 1;
     }
-
-    rook_moves
 }
 
-fn gen_bishop_move_table() -> [[u64; 512]; 64] {
-    let mut bishop_moves = [[0; 512]; 64];
+fn gen_bishop_move_table() {
     let mut sq = 0;
     while sq < 64 {
         let mut blocker_idx = 0;
@@ -453,16 +450,15 @@ fn gen_bishop_move_table() -> [[u64; 512]; 64] {
                 BISHOP_MASK[sq].count_ones() as i32,
                 BISHOP_MASK[sq],
             );
-
-            bishop_moves[sq]
-                [((blockers.wrapping_mul(BISHOP_MAGIC[sq])) >> (64 - B_BIT)) as usize] =
-                batt(sq as i32, blockers);
+            unsafe {
+                BISHOP_MOVES[sq]
+                    [((blockers.wrapping_mul(BISHOP_MAGIC[sq])) >> (64 - B_BIT)) as usize] =
+                    batt(sq as i32, blockers);
+            }
             blocker_idx += 1;
         }
         sq += 1;
     }
-
-    bishop_moves
 }
 
 const fn gen_superray() -> [u64; 64] {

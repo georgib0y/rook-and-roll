@@ -62,49 +62,70 @@ pub fn eval(board: &Board, colour_mul: i32) -> i32 {
                 mg_phase + PIECE_PHASE_VAL[p] * pieces.count_ones() as i32
             }),
     );
-
+    
     let eg_phase = 24 - mg_phase;
-
+    
     let eval = (board.mg_value() * mg_phase + board.eg_value() * eg_phase) / 24;
-
+    
+    // gen_mat_value(board) * colour_mul
     eval * colour_mul
+    // board.mg_value() * colour_mul
 }
 
 pub fn gen_board_value(board: &Board) -> (i32, i32) {
-    let values = |colour| {
-        board
-            .pieces_iter()
-            .map(|p| *p)
-            .enumerate()
-            .skip(colour)
-            .step_by(2)
-            .fold((0, 0), |values, (piece, mut pieces)| {
-                let mut p_mg = 0;
-                let mut p_eg = 0;
-                while pieces > 0 {
-                    let sq = pieces.trailing_zeros() as usize;
-                    let (mg, eg) = PST::pst(piece, sq);
+    board
+        .pieces_iter()
+        .copied()
+        .enumerate()
+        .fold((0, 0), |values, (piece, mut pieces)| {
+            let mut mg = 0;
+            let mut eg = 0;
 
-                    p_mg += mg as i32 + MAT_SCORES[piece];
-                    p_eg += eg as i32 + MAT_SCORES[piece];
-                    pieces &= pieces - 1;
-                }
+            while pieces > 0 {
+                let sq = pieces.trailing_zeros() as usize;
+                let (p_mg, p_eg) = PST::pst(piece, sq);
+                mg += p_mg as i32 + MAT_SCORES[piece];
+                eg += p_eg as i32 + MAT_SCORES[piece];
+                pieces &= pieces - 1;
+            }
 
-                (values.0 + p_mg, values.1 + p_eg)
-            })
-    };
+            (values.0 + mg, values.1 + eg)
+        })
 
-    let (white_mg, white_eg) = values(WHITE);
-    let (black_mg, black_eg) = values(BLACK);
-
-    (white_mg + black_mg, white_eg + black_eg)
+    //
+    // let values = |colour| {
+    //     board
+    //         .pieces_iter().copied()
+    //         .enumerate()
+    //         .skip(colour)
+    //         .step_by(2)
+    //         .fold((0, 0), |values, (piece, mut pieces)| {
+    //             let mut p_mg = 0;
+    //             let mut p_eg = 0;
+    //             while pieces > 0 {
+    //                 let sq = pieces.trailing_zeros() as usize;
+    //                 let (mg, eg) = PST::pst(piece, sq);
+    //
+    //                 p_mg += mg as i32 + MAT_SCORES[piece];
+    //                 p_eg += eg as i32 + MAT_SCORES[piece];
+    //                 pieces &= pieces - 1;
+    //             }
+    //
+    //             (values.0 + p_mg, values.1 + p_eg)
+    //         })
+    // };
+    //
+    // let (white_mg, white_eg) = values(WHITE);
+    // let (black_mg, black_eg) = values(BLACK);
+    //
+    // (white_mg + black_mg, white_eg + black_eg)
 }
 /// returns (mg, eg) as values
 pub fn gen_pst_value(board: &Board) -> (i32, i32) {
     let values = |colour| {
         board
             .pieces_iter()
-            .map(|p| *p)
+            .copied()
             .enumerate()
             .skip(colour)
             .step_by(2)
@@ -130,16 +151,16 @@ pub fn gen_pst_value(board: &Board) -> (i32, i32) {
 }
 
 pub fn gen_mat_value(b: &Board) -> i32 {
-    // b.pieces_iter()
-    //     .map(|pieces| pieces.count_ones() as i32)
-    //     .enumerate()
-    //     .fold(0, |mat, (piece, count)| mat + MAT_SCORES[piece] * count)
+    b.pieces_iter()
+        .map(|pieces| pieces.count_ones() as i32)
+        .enumerate()
+        .fold(0, |mat, (piece, count)| mat + MAT_SCORES[piece] * count)
 
-    let mut mat = 0;
-    for p in 0..12 {
-        let count = b.pieces(p).count_ones();
-        mat += MAT_SCORES[p] * count as i32;
-    }
-
-    mat
+    // let mut mat = 0;
+    // for p in 0..12 {
+    //     let count = b.pieces(p).count_ones();
+    //     mat += MAT_SCORES[p] * count as i32;
+    // }
+    //
+    // mat
 }

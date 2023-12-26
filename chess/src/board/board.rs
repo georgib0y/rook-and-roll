@@ -38,7 +38,7 @@ const DEFAULT_UTIL: [u64; 3] = [
 ];
 
 // 0 - white to move, 1 - black to move
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq)]
 pub struct Board {
     pub(super) pieces: [u64; 12],
     pub(super) util: [u64; 3],
@@ -49,6 +49,12 @@ pub struct Board {
     pub(super) hash: u64,
     pub(super) mg_value: i32,
     pub(super) eg_value: i32,
+}
+
+impl Default for Board {
+    fn default() -> Self {
+        Board::new()
+    }
 }
 
 impl Board {
@@ -182,6 +188,11 @@ impl Board {
         board.apply_move(to, piece, xpiece, move_type);
         board.hash ^= Zorb::colour();
         board.ctm ^= 1;
+
+        // let (mg, eg) = gen_board_value(&board);
+        // assert_eq!(board.mg_value, mg);
+        // assert_eq!(board.eg_value, eg);
+
         board
     }
 
@@ -353,6 +364,40 @@ impl Board {
     }
 }
 
+impl PartialEq for Board {
+    fn eq(&self, other: &Self) -> bool {
+        if self.pieces != other.pieces {
+            return false;
+        }
+
+        if self.util != other.util {
+            return false;
+        }
+
+        if self.ctm != other.ctm {
+            return false;
+        }
+
+        if self.castle_state != other.castle_state {
+            return false;
+        }
+
+        if self.ep != other.ep {
+            return false;
+        }
+
+        if self.hash != other.hash {
+            return false;
+        }
+
+        if self.mg_value != other.mg_value || self.eg_value != other.eg_value {
+            return false;
+        }
+
+        true
+    }
+}
+
 const SQ_PIECES: [&str; 12] = [
     "P ", "p ", "N ", "n ", "R ", "r ", "B ", "b ", "Q ", "q ", "K ", "k ",
 ];
@@ -388,7 +433,7 @@ pub const BQS_STATE: usize = 3;
 
 static ZORB_ARR: [u64; 781] = gen_zorb();
 
-const SEED: u64 = 72520922902527;
+const SEED: u64 = 7252092290252765432;
 
 const fn xorshift(mut x: u64) -> u64 {
     x ^= x << 13;
@@ -400,11 +445,11 @@ const fn xorshift(mut x: u64) -> u64 {
 const fn gen_zorb() -> [u64; 781] {
     let mut zorb = [0; 781];
 
-    let mut x = SEED;
+    let mut rand = SEED;
     let mut i = 0;
     while i < 781 {
-        x = xorshift(x);
-        zorb[i] = x;
+        rand = xorshift(rand);
+        zorb[i] = rand;
         i += 1;
     }
 
@@ -417,22 +462,22 @@ pub struct Zorb;
 impl Zorb {
     #[inline]
     pub fn piece(piece: usize, sq: usize) -> u64 {
-        unsafe { ZORB_ARR[piece * 64 + sq] }
+        ZORB_ARR[piece * 64 + sq]
     }
 
     #[inline]
     pub fn colour() -> u64 {
-        unsafe { ZORB_ARR[768] }
+        ZORB_ARR[768]
     }
 
     #[inline]
     pub fn castle_rights(idx: usize) -> u64 {
-        unsafe { ZORB_ARR[769 + idx] }
+        ZORB_ARR[769 + idx]
     }
 
     #[inline]
     pub fn ep_file(sq: usize) -> u64 {
-        unsafe { ZORB_ARR[773 + (sq % 8)] }
+        ZORB_ARR[773 + (sq % 8)]
     }
 }
 
@@ -475,7 +520,7 @@ pub fn gen_hash(board: Board) -> u64 {
 macro_rules! print_bb {
     ( $( $args:expr ),* ) => {
         {
-            $( crate::board::board::_print_bb($args); )*
+            $( $crate::board::_print_bb($args); )*
         }
     };
 }
@@ -519,13 +564,7 @@ fn inc_value_update() {
     assert_eq!(quiet_board.mg_value, mg_quiet);
     assert_eq!(quiet_board.eg_value, eg_quiet);
 
-    let cap_move = Move::new(
-        25,
-        32,
-        BISHOP as u32,
-        KING as u32 + 1,
-        crate::movegen::moves::MoveType::Cap,
-    );
+    let cap_move = Move::new(25, 32, BISHOP as u32, KING as u32 + 1, MoveType::Cap);
     let cap_board = board.copy_make(cap_move);
 
     let mat = gen_mat_value(&cap_board);
@@ -601,4 +640,22 @@ fn test_inc_values_and_hash_copy_make() {
             assert_eq!(b.hash, hash)
         })
     });
+}
+
+#[test]
+fn add_rm_piece_value() {
+    crate::init();
+
+    let mut b = Board::new();
+    assert_eq!(b.mg_value, 0);
+    assert_eq!(b.eg_value, 0);
+
+    // a2a3
+    b.remove_piece_value(0, 8);
+    assert_eq!(b.mg_value, 0 - 100 - -35);
+    assert_eq!(b.eg_value, 0 - 100 - 13);
+
+    b.add_piece_value(0, 16);
+    assert_eq!(b.mg_value, 0 - 100 - -35 + 100 + -26);
+    assert_eq!(b.eg_value, 0 - 100 - 13 + 100 + 4);
 }

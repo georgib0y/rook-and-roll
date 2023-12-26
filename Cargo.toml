@@ -16,9 +16,14 @@ chrono = "0.4.22"
 
 [profile.dev]
 debug = 2
+debuginfo-level = 1
+
 
 [profile.release]
 lto = true
+debug=2
+debuginfo-level = 1
+
 
 [profile.test]
 debug = 2
