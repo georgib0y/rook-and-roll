@@ -3,13 +3,14 @@ use crate::movegen::move_info::SQUARES;
 use crate::movegen::movegen::{get_all_attackers, NO_SQUARES};
 use crate::movegen::moves::{Move, MoveType};
 use crate::search::eval::PIECE_VALUES;
-use crate::search::searchers::Searcher;
+use crate::search::searcher::Searcher;
+use crate::search::tt::TT;
 use std::cmp::max;
 
 pub const MAX_MOVES: usize = 214;
 const BEST_MOVE_SCORE: i32 = i32::MAX;
-pub const CAP_SCORE_OFFSET: i32 = 10000;
 const KILLER_OFFSET: i32 = 10000;
+const CAP_SCORE_MUL: i32 = 10000;
 
 pub trait MoveList: IntoIterator<Item = Move> {
     fn add_move(&mut self, m: Move);
@@ -64,20 +65,22 @@ impl<const N: usize> MoveList for StackMoveList<N> {
     }
 }
 
-pub struct ScoredMoveList<'a, S: Searcher, const N: usize = MAX_MOVES> {
+pub struct ScoredMoveList<'a, T: TT, const N: usize> {
     moves: [(Move, i32); N],
-    count: usize,
     length: usize,
     board: &'a Board,
-    searcher: &'a S,
+    searcher: &'a Searcher<'a, T>,
     depth: usize,
 }
 
-impl<'a, S: Searcher, const N: usize> ScoredMoveList<'a, S, N> {
-    pub fn new(board: &'a Board, searcher: &'a S, depth: usize) -> ScoredMoveList<'a, S, N> {
+impl<'a, T: TT> ScoredMoveList<'a, T, MAX_MOVES> {
+    pub fn new(
+        board: &'a Board,
+        searcher: &'a Searcher<'a, T>,
+        depth: usize,
+    ) -> ScoredMoveList<'a, T, MAX_MOVES> {
         ScoredMoveList {
-            moves: [(Move::empty(), 0); N],
-            count: 0,
+            moves: [(Move::empty(), 0); MAX_MOVES],
             length: 0,
             board,
             searcher,
@@ -86,17 +89,33 @@ impl<'a, S: Searcher, const N: usize> ScoredMoveList<'a, S, N> {
     }
 }
 
-impl<'a, S: Searcher, const N: usize> IntoIterator for ScoredMoveList<'a, S, N> {
+impl<'a, T: TT, const N: usize> ScoredMoveList<'a, T, N> {
+    pub fn with_size(
+        board: &'a Board,
+        searcher: &'a Searcher<'a, T>,
+        depth: usize,
+    ) -> ScoredMoveList<'a, T, N> {
+        ScoredMoveList {
+            moves: [(Move::empty(), 0); N],
+            length: 0,
+            board,
+            searcher,
+            depth,
+        }
+    }
+}
+
+impl<'a, T: TT, const N: usize> IntoIterator for ScoredMoveList<'a, T, N> {
     type Item = Move;
     type IntoIter = ScoreMoveListIter<N>;
 
-    fn into_iter(mut self) -> Self::IntoIter {
-        self.moves[0..self.length].sort_unstable_by(|m1, m2| m2.1.cmp(&m1.1));
+    fn into_iter(self) -> Self::IntoIter {
+        // self.moves[0..self.length].sort_unstable_by(|m1, m2| m2.1.cmp(&m1.1));
         ScoreMoveListIter::new(self.moves, self.length)
     }
 }
 
-impl<'a, S: Searcher, const N: usize> MoveList for ScoredMoveList<'a, S, N> {
+impl<'a, T: TT, const N: usize> MoveList for ScoredMoveList<'a, T, N> {
     fn add_move(&mut self, m: Move) {
         let score = score_move(self.board, self.searcher, self.depth, m);
 
@@ -106,6 +125,49 @@ impl<'a, S: Searcher, const N: usize> MoveList for ScoredMoveList<'a, S, N> {
 
     fn len(&self) -> usize {
         self.length
+    }
+}
+
+pub struct QSearchMoveList<'a, T: TT, const N: usize>(ScoredMoveList<'a, T, N>);
+
+impl<'a, T: TT, const N: usize> QSearchMoveList<'a, T, N> {
+    pub fn new(
+        board: &'a Board,
+        searcher: &'a Searcher<T>,
+        depth: usize,
+    ) -> QSearchMoveList<'a, T, N> {
+        QSearchMoveList(ScoredMoveList::<'a, T, N>::with_size(
+            board, searcher, depth,
+        ))
+    }
+}
+
+impl<'a, T: TT, const N: usize> IntoIterator for QSearchMoveList<'a, T, N> {
+    type Item = Move;
+
+    type IntoIter = ScoreMoveListIter<N>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        // self.0.moves[0..self.0.length].sort_unstable_by(|m1, m2| m2.1.cmp(&m1.1));
+        ScoreMoveListIter::new(self.0.moves, self.0.length)
+    }
+}
+
+impl<'a, T: TT, const N: usize> MoveList for QSearchMoveList<'a, T, N> {
+    fn add_move(&mut self, m: Move) {
+        let score = score_move(self.0.board, self.0.searcher, self.0.depth, m);
+
+        // only add the move if it's SEE is > 0 (accounting for the offset)
+        if m.move_type().is_cap() && score < 0 {
+            return;
+        }
+
+        self.0.moves[self.0.length] = (m, score);
+        self.0.length += 1;
+    }
+
+    fn len(&self) -> usize {
+        self.0.length
     }
 }
 
@@ -129,51 +191,64 @@ impl<const N: usize> Iterator for ScoreMoveListIter<N> {
     type Item = Move;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.count == self.length {
-            return None;
+        // get next option of move with highest score in list
+        // let mut next = &mut self.moves[0];
+
+        // for move_score in self.moves[..self.length].iter_mut() {
+        //     if move_score.1 > next.1 {
+        //         next = move_score;
+        //     }
+        // }
+
+        // if next.1 == i32::MIN {
+        //     return None;
+        // }
+
+        // next.1 = i32::MIN;
+
+        // Some(next.0)
+
+        let m = self.moves[..self.length]
+            .iter_mut()
+            .filter(|(_, s)| s > &i32::MIN)
+            .max_by(|(_, s1), (_, s2)| s1.cmp(s2));
+
+        let next_move = m.as_ref().map(|nm| nm.0);
+
+        // set the move score to min so that it is not picked again
+        if let Some(m) = m {
+            m.1 = i32::MIN
         }
 
-        let m = self.moves[self.count].0;
-        self.count += 1;
-        Some(m)
+        next_move
+        // if self.count == self.length {
+        //     return None;
+        // }
+
+        // let m = self.moves[self.count].0;
+        // self.count += 1;
+        // Some(m)
     }
 }
 
-pub fn score_move(b: &Board, s: &impl Searcher, depth: usize, m: Move) -> i32 {
-    if s.get_tt_best_move(b.hash()) == Some(m) {
+pub fn score_move<T: TT>(b: &Board, s: &Searcher<T>, depth: usize, m: Move) -> i32 {
+    if s.tt.get_bestmove(b.hash()) == Some(m) {
         return BEST_MOVE_SCORE;
     }
 
-    match m.move_type() {
-        MoveType::Quiet
-        | MoveType::Double
-        | MoveType::WKingSide
-        | MoveType::BKingSide
-        | MoveType::WQueenSide
-        | MoveType::BQueenSide
-        | MoveType::Promo
-        | MoveType::Ep => score_quiet(b, s, depth, m),
-
-        MoveType::Cap
-        | MoveType::NPromoCap
-        | MoveType::RPromoCap
-        | MoveType::BPromoCap
-        | MoveType::QPromoCap => see(b, m) + CAP_SCORE_OFFSET,
+    if m.move_type().is_cap() {
+        see(b, m) * CAP_SCORE_MUL
+    } else {
+        score_quiet(b, s, depth, m)
     }
 }
 
-fn score_quiet(b: &Board, s: &impl Searcher, depth: usize, m: Move) -> i32 {
-    let km = s.km_get(depth);
-
-    if km[0].filter(|killer| *killer == m).is_some() {
-        return KILLER_OFFSET + 1;
+fn score_quiet<T: TT>(b: &Board, s: &Searcher<T>, depth: usize, m: Move) -> i32 {
+    if let Some(km_priority) = s.km.get_move_priority(m, depth) {
+        return KILLER_OFFSET + km_priority;
     }
 
-    if km[1].filter(|killer| *killer == m).is_some() {
-        return KILLER_OFFSET;
-    }
-
-    s.get_hh_score(b.ctm(), m.from() as usize, m.to() as usize) as i32
+    s.hh.get(b.ctm(), m.from() as usize, m.to() as usize) as i32
 }
 
 fn see(b: &Board, m: Move) -> i32 {

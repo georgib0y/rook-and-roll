@@ -1,3 +1,5 @@
+use board::Zorb;
+
 use crate::movegen::move_info::MT;
 
 pub mod board;
@@ -6,6 +8,7 @@ pub mod perft;
 pub mod search;
 
 pub fn init() {
+    Zorb::init();
     MT::init();
 }
 

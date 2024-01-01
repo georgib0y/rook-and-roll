@@ -4,7 +4,7 @@ use crate::board::{Board, WHITE};
 use crate::movegen::moves::{KillerMoves, Move, PrevMoves, NULL_MOVE};
 use crate::search::search::root_pvs;
 use crate::search::searchers::{SeachResult, SearchError, Searcher, MAX_DEPTH, MIN_SCORE};
-use crate::search::tt::{EntryScore, SmpTTable};
+use crate::search::tt::{EntryScore, SmpTTable, TT};
 use crate::search::HistoryTable;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -104,19 +104,19 @@ impl<'a> LazySmp<'a> {
     }
 }
 
-struct SmpSearcher {
+struct SmpSearcher<T: TT + Sync> {
     abort: Arc<AtomicBool>,
     root_depth: i32,
     ply: i32,
     colour_mul: i32,
-    tt: Arc<SmpTTable>,
+    tt: T,
     km: KillerMoves,
     hh: HistoryTable,
     prev_moves: PrevMoves,
 }
 
-impl SmpSearcher {
-    pub fn new(abort: Arc<AtomicBool>, tt: Arc<SmpTTable>, prev_moves: PrevMoves) -> SmpSearcher {
+impl<T: TT + Sync> SmpSearcher<T> {
+    pub fn new(abort: Arc<AtomicBool>, tt: T, prev_moves: PrevMoves) -> SmpSearcher<T> {
         SmpSearcher {
             abort,
             root_depth: 0,
@@ -130,7 +130,7 @@ impl SmpSearcher {
     }
 }
 
-impl Searcher for SmpSearcher {
+impl<T: TT + Sync> Searcher for SmpSearcher<T> {
     fn init_search(&mut self, b: &Board, depth: usize) {
         self.colour_mul = if b.ctm() == WHITE { 1 } else { -1 };
         self.ply = 0;

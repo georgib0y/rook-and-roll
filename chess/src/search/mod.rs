@@ -1,6 +1,7 @@
 pub mod eval;
-pub mod search;
-pub mod searchers;
+// pub mod search;
+pub mod searcher;
+// pub mod searchers;
 pub mod tt;
 
 #[derive(Clone)]

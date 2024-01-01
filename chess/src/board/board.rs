@@ -3,6 +3,7 @@ use crate::movegen::movegen::{get_piece, get_xpiece};
 use crate::movegen::moves::{Move, MoveType};
 use crate::search::eval::{gen_board_value, MAT_SCORES};
 use std::fmt;
+use std::ops::Index;
 
 pub const WHITE: usize = 0;
 pub const BLACK: usize = 1;
@@ -431,7 +432,7 @@ pub const WQS_STATE: usize = 1;
 pub const BKS_STATE: usize = 2;
 pub const BQS_STATE: usize = 3;
 
-static ZORB_ARR: [u64; 781] = gen_zorb();
+static mut ZORB_ARR: [u64; 781] = [0; 781];
 
 const SEED: u64 = 7252092290252765432;
 
@@ -459,25 +460,40 @@ const fn gen_zorb() -> [u64; 781] {
 // zorbist array indexing:
 // 0-767: piece positions, 768: colour, 769-772: castle rights, 773-780: file of ep square
 pub struct Zorb;
+
+impl Index<usize> for Zorb {
+    type Output = u64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        unsafe { &ZORB_ARR[index] }
+    }
+}
+
 impl Zorb {
+    pub fn init() {
+        unsafe {
+            ZORB_ARR = gen_zorb();
+        }
+    }
+
     #[inline]
     pub fn piece(piece: usize, sq: usize) -> u64 {
-        ZORB_ARR[piece * 64 + sq]
+        Zorb[piece * 64 + sq]
     }
 
     #[inline]
     pub fn colour() -> u64 {
-        ZORB_ARR[768]
+        Zorb[768]
     }
 
     #[inline]
     pub fn castle_rights(idx: usize) -> u64 {
-        ZORB_ARR[769 + idx]
+        Zorb[769 + idx]
     }
 
     #[inline]
     pub fn ep_file(sq: usize) -> u64 {
-        ZORB_ARR[773 + (sq % 8)]
+        Zorb[773 + (sq % 8)]
     }
 }
 

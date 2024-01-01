@@ -1,10 +1,10 @@
-use crate::board::{Board, BLACK, KING, WHITE};
+use crate::board::{Board, BLACK, WHITE};
 use crate::movegen::move_list::{ScoredMoveList, MAX_MOVES};
 use crate::movegen::movegen::{
-    gen_all_attacks, gen_check_moves, gen_moves, is_in_check, is_legal_move, moved_into_check,
+    gen_all_attacks, gen_moves, is_in_check, is_legal_move, moved_into_check,
 };
 use crate::movegen::moves::{Move, MoveType};
-use crate::search::eval::{eval, CHECKMATE, MATED, PIECE_VALUES, STALEMATE};
+use crate::search::eval::{eval, CHECKMATE, PIECE_VALUES, STALEMATE};
 use crate::search::searchers::{SeachResult, SearchError, Searcher, MIN_SCORE};
 use crate::search::tt::EntryScore;
 use crate::search::tt::EntryScore::{Alpha, Beta, PV};
@@ -18,10 +18,8 @@ pub fn root_pvs(
 ) -> SeachResult {
     s.init_search(b, depth);
 
-    let in_check = is_in_check(b);
-
     let mut ml: ScoredMoveList<_, MAX_MOVES> = ScoredMoveList::new(b, s, depth);
-    gen_moves(b, &mut ml, in_check);
+    gen_moves(b, &mut ml, is_in_check(b));
 
     let mut best_move = None;
     let mut best_score = MIN_SCORE;
@@ -79,7 +77,7 @@ fn pvs(s: &mut impl Searcher, b: &Board, mut alpha: i32, beta: i32, depth: usize
 
     for m in ml {
         let score = if found_pv {
-            let Some(mut score) = try_move(s, b, m, alpha + 1, alpha, depth) else {
+            let Some(mut score) = try_move(s, b, m, alpha, alpha + 1, depth) else {
                 continue;
             };
 
@@ -169,47 +167,27 @@ fn update_alpha_checkmate_score(
 }
 
 pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) -> i32 {
-    let in_check = is_in_check(board);
-
-    let eval = if in_check {
-        alpha
-    } else {
-        let eval = eval(board, s.colour_multiplier());
-
-        if eval >= beta {
-            //dbg!("eval >= beta", eval, beta);
-            return beta;
-        }
-
-        if alpha < eval {
-            //dbg!("alpha < eval", alpha, eval);
-            alpha = eval;
-        }
-
-        eval
-    };
-
-    //dbg!("quiesce eval", eval);
-
-    let mut ml = ScoredMoveList::<_, MAX_MOVES>::new(board, s, 0);
-    if in_check {
-        gen_check_moves(board, &mut ml);
-    } else {
-        gen_all_attacks(board, &mut ml);
+    if is_in_check(board) {
+        return pvs(s, board, alpha, beta, 1);
     }
 
-    let mut has_moved = false;
-    for m in ml {
-        if m.xpiece() >= KING as u32 {
-            return MATED - s.ply();
-            // return beta;
-        }
+    let eval = eval(board, s.colour_multiplier());
 
+    if eval >= beta {
+        return beta;
+    }
+
+    if alpha < eval {
+        alpha = eval;
+    }
+
+    let mut ml = ScoredMoveList::<_, MAX_MOVES>::new(board, s, 0);
+    gen_all_attacks(board, &mut ml);
+
+    for m in ml {
         let Some(score) = try_move_quiesce(s, board, m, alpha, beta, eval) else {
             continue;
         };
-
-        has_moved = true;
 
         if score >= beta {
             return beta;
@@ -220,12 +198,63 @@ pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) 
         }
     }
 
-    if in_check && !has_moved {
-        CHECKMATE + s.ply()
-    } else {
-        alpha
-    }
+    alpha
 }
+
+// pub fn quiesce(s: &mut impl Searcher, board: &Board, mut alpha: i32, beta: i32) -> i32 {
+//     let in_check = is_in_check(board);
+
+//     let eval = if in_check {
+//         alpha
+//     } else {
+//         let eval = eval(board, s.colour_multiplier());
+
+//         if eval >= beta {
+//             //dbg!("eval >= beta", eval, beta);
+//             return beta;
+//         }
+
+//         if alpha < eval {
+//             //dbg!("alpha < eval", alpha, eval);
+//             alpha = eval;
+//         }
+
+//         eval
+//     };
+
+//     //dbg!("quiesce eval", eval);
+
+//     let mut ml = ScoredMoveList::<_, MAX_MOVES>::new(board, s, 0);
+//     gen_moves(board, &mut ml, in_check);
+
+//     let mut has_moved = false;
+//     for m in ml {
+//         if m.xpiece() >= KING as u32 {
+//             return MATED - s.ply();
+//             // return beta;
+//         }
+
+//         let Some(score) = try_move_quiesce(s, board, m, alpha, beta, eval) else {
+//             continue;
+//         };
+
+//         has_moved = true;
+
+//         if score >= beta {
+//             return beta;
+//         }
+
+//         if score > alpha {
+//             alpha = score;
+//         }
+//     }
+
+//     if in_check && !has_moved {
+//         CHECKMATE + s.ply()
+//     } else {
+//         alpha
+//     }
+// }
 
 fn try_move_quiesce(
     s: &mut impl Searcher,

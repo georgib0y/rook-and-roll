@@ -1,7 +1,7 @@
 use crate::board::Board;
 use crate::movegen::moves::{Move, NULL_MOVE};
 use crate::search::eval::{CHECKMATE, MATED};
-use crate::search::searchers::{MAX_DEPTH, MIN_SCORE};
+use crate::search::searcher::{MAX_DEPTH, MIN_SCORE};
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, RwLock};
@@ -9,16 +9,110 @@ use EntryScore::*;
 
 pub const EMPTY_HASH: u64 = 0;
 
-// pub const TTABLE_SIZE: usize = 1 << 26; // 2^20
-// const TT_IDX_MASK: u64 = TTABLE_SIZE as u64 - 1;
+pub const TTABLE_SIZE: usize = 1 << 24; // 2^20
+const TT_IDX_MASK: u64 = TTABLE_SIZE as u64 - 1;
 
-pub const TTABLE_SIZE: usize = 65536; // 2^16
-const TT_IDX_MASK: u64 = 0xFFFF;
+// pub const TTABLE_SIZE: usize = 65536; // 2^16
+// const TT_IDX_MASK: u64 = 0xFFFF;
 
 #[inline]
 fn tt_idx(hash: u64) -> usize {
     // ((hash >> 32) & TT_IDX_MASK) as usize
     (hash & TT_IDX_MASK) as usize
+}
+
+fn should_replace(entry: &impl Entry, score: EntryScore) -> bool {
+    score.is_pv() || !entry.score().is_pv()
+}
+
+pub trait Entry {
+    fn hash(&self) -> u64;
+    fn draft(&self) -> i8;
+    fn score(&self) -> EntryScore;
+    fn best_move(&self) -> Move;
+}
+
+pub trait TT {
+    type Entry: Entry;
+
+    fn get_entry(&self, hash: u64) -> &Self::Entry;
+    fn set_entry(&mut self, hash: u64, entry: TTEntry);
+    fn clear(&mut self);
+
+    fn get(&self, hash: u64) -> Option<&Self::Entry> {
+        Some(self.get_entry(hash)).filter(|e| e.hash() != EMPTY_HASH)
+
+        // let entry = self.get_entry(hash);
+
+        // if entry.hash() == EMPTY_HASH {
+        //     None
+        // } else {
+        //     Some(entry)
+        // }
+    }
+
+    fn get_score(&self, hash: u64, draft: i32, alpha: i32, beta: i32) -> Option<i32> {
+        self.get(hash)
+            .filter(|entry| entry.draft() >= draft as i8)
+            .and_then(|entry| entry.score().get_score(alpha, beta, draft))
+    }
+
+    fn get_bestmove(&self, hash: u64) -> Option<Move> {
+        self.get(hash)
+            .filter(|entry| entry.best_move() != NULL_MOVE)
+            .map(|entry| entry.best_move())
+    }
+
+    fn get_pv(&self, hash: u64) -> Option<Move> {
+        self.get(hash)
+            .filter(|entry| entry.best_move() != NULL_MOVE)
+            .filter(|entry| entry.score().is_pv())
+            .map(|entry| entry.best_move())
+    }
+
+    fn insert(&mut self, hash: u64, score: EntryScore, best: Option<Move>, draft: i32) {
+        match self.get(hash) {
+            Some(e) if !should_replace(e, score) => return,
+            _ => {}
+        }
+
+        self.set_entry(
+            hash,
+            TTEntry::new(hash, score.adjust_insert(draft), best, draft),
+        )
+    }
+
+    fn get_full_pv(&self, board: &Board) -> Vec<Move> {
+        let mut pv = vec![];
+        let mut b = *board;
+        while let Some(best) = self.get_pv(b.hash()) {
+            b = b.copy_make(best);
+            pv.push(best);
+        }
+
+        pv
+    }
+
+    fn print_stats(&self) {
+        println!("No TT stats to show");
+    }
+}
+
+#[derive(Default)]
+pub struct NoTTable {
+    entry: TTEntry,
+}
+
+impl TT for NoTTable {
+    type Entry = TTEntry;
+
+    fn get_entry(&self, _hash: u64) -> &TTEntry {
+        &self.entry
+    }
+
+    fn set_entry(&mut self, _hash: u64, _entry: TTEntry) {}
+
+    fn clear(&mut self) {}
 }
 
 #[derive(Debug, Default)]
@@ -42,85 +136,55 @@ impl TTable {
             new_inserts: AtomicUsize::new(0),
         }
     }
+}
 
-    pub fn stats(&self) -> (usize, usize, usize, usize, usize, usize) {
-        (
-            self.hits.load(SeqCst),
-            self.misses.load(SeqCst),
-            self.collisions.load(SeqCst),
-            self.inserts.load(SeqCst),
-            self.new_inserts.load(SeqCst),
-            self.ttable
-                .iter()
-                .filter(|entry| entry.hash != EMPTY_HASH)
-                .count(),
-        )
+impl TT for TTable {
+    type Entry = TTEntry;
+
+    fn get_entry(&self, hash: u64) -> &TTEntry {
+        &self.ttable[tt_idx(hash)]
     }
 
-    pub fn get(&self, hash: u64) -> Option<&TTEntry> {
-        let entry = &self.ttable[tt_idx(hash)];
-        if entry.hash == hash {
-            self.hits.fetch_add(1, SeqCst);
-            Some(entry)
-        } else {
-            if entry.hash != EMPTY_HASH {
-                self.collisions.fetch_add(1, SeqCst);
-            } else {
-                self.misses.fetch_add(1, SeqCst);
-            }
-            None
-        }
+    fn set_entry(&mut self, hash: u64, entry: TTEntry) {
+        self.ttable[tt_idx(hash)] = entry;
     }
 
-    pub fn get_entry_at_hash_mut(&mut self, hash: u64) -> &mut TTEntry {
-        &mut self.ttable[tt_idx(hash)]
-    }
-
-    pub fn get_score(&self, hash: u64, draft: i32, alpha: i32, beta: i32) -> Option<i32> {
-        self.get(hash)
-            .filter(|entry| entry.draft >= draft as i8)
-            .and_then(|entry| entry.score.get_score(alpha, beta, draft))
-    }
-
-    pub fn get_bestmove(&self, hash: u64) -> Option<Move> {
-        self.get(hash)
-            .filter(|entry| entry.best != NULL_MOVE)
-            .map(|entry| entry.best)
-    }
-
-    pub fn get_pv(&self, hash: u64) -> Option<Move> {
-        self.get(hash)
-            .filter(|entry| entry.best != NULL_MOVE)
-            .filter(|entry| entry.score.is_pv())
-            .map(|entry| entry.best)
-        // None
-    }
-
-    pub fn insert(&mut self, hash: u64, score: EntryScore, best: Option<Move>, draft: i32) {
-        let entry = &mut self.ttable[tt_idx(hash)];
-
-        if entry.hash == hash || score.is_pv() || !entry.score.is_pv() {
-            self.inserts.fetch_add(1, SeqCst);
-            *entry = TTEntry::new(hash, score.adjust_insert(draft), best, draft)
-        }
-        // self.ttable[tt_idx(hash)] = TTEntry::new(hash, score.adjust_insert(draft), best, draft)
-    }
-
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.ttable
             .iter_mut()
             .for_each(|entry| *entry = TTEntry::default())
     }
 
-    pub fn get_full_pv(&self, board: &Board) -> Vec<Move> {
-        let mut pv = vec![];
-        let mut b = *board;
-        while let Some(best) = self.get_pv(b.hash()) {
-            b = b.copy_make(best);
-            pv.push(best);
-        }
+    fn print_stats(&self) {
+        let hits = self.hits.load(SeqCst);
+        let misses = self.misses.load(SeqCst);
+        let cols = self.collisions.load(SeqCst);
+        let inserts = self.inserts.load(SeqCst);
+        let new_inserts = self.new_inserts.load(SeqCst);
+        let count = self
+            .ttable
+            .iter()
+            .filter(|entry| entry.hash != EMPTY_HASH)
+            .count();
 
-        pv
+        let total = hits + misses + cols;
+        let percent = (hits as f64 / total as f64) * 100.0;
+        let capacity = (count as f64 / TTABLE_SIZE as f64) * 100.0;
+
+        let occ_inserts = (count as f64 / inserts as f64) * 100.0;
+        println!(
+            "{} hits, \
+                {} collisions, \
+                {} misses, \
+                {} total gets, \
+                {} inserts, \
+                {} new inserts, \
+                hit/miss+coll {:.2}%, \
+                tt occupied {}, \
+                tt capacity {:.2}%, \
+                occ/inserts {:.2}%",
+            hits, cols, misses, total, inserts, new_inserts, percent, count, capacity, occ_inserts
+        );
     }
 }
 
@@ -137,48 +201,20 @@ impl SmpTTable {
                 .collect(),
         })
     }
+}
 
-    pub fn get_score(
-        &self,
-        hash: u64,
-        depth: usize,
-        alpha: i32,
-        beta: i32,
-        ply: i32,
-    ) -> Option<i32> {
-        // self.ttable[tt_idx(hash)]
-        //     .read()
-        //     .unwrap()
-        //     .get_score(hash, alpha, beta, ply as usize)
-        None
+impl TT for Arc<SmpTTable> {
+    type Entry = RwLock<TTEntry>;
+
+    fn get_entry(&self, hash: u64) -> &Self::Entry {
+        &self.ttable[tt_idx(hash)]
     }
 
-    pub fn get_best(&self, hash: u64) -> Option<Move> {
-        // self.ttable[tt_idx(hash)].read().unwrap().get_bestmove(hash)
-        None
+    fn set_entry(&mut self, hash: u64, entry: TTEntry) {
+        *self.ttable[tt_idx(hash)].write().unwrap() = entry;
     }
 
-    pub fn get_best_pv(&self, hash: u64) -> Option<Move> {
-        // self.ttable[tt_idx(hash)].read().unwrap().get_pv(hash)
-        None
-    }
-
-    pub fn insert(
-        &self,
-        hash: u64,
-        score: i32,
-        e_type: EntryScore,
-        depth: usize,
-        best: Option<Move>,
-        ply: usize,
-    ) {
-        // self.ttable[(hash & TT_IDX_MASK) as usize]
-        //     .write()
-        //     .unwrap()
-        //     .insert(hash, score, e_type, best, ply);
-    }
-
-    pub fn clear(&self) {
+    fn clear(&mut self) {
         self.ttable
             .iter()
             .map(|rw| rw.write().unwrap())
@@ -213,7 +249,6 @@ impl EntryScore {
             PV(score) if score < CHECKMATE + MAX_DEPTH as i32 => PV(score - ply),
             Alpha(score) if score < CHECKMATE + MAX_DEPTH as i32 => Alpha(score - ply),
             Beta(score) if score < CHECKMATE + MAX_DEPTH as i32 => Beta(score - ply),
-
             _ => self,
         }
     }
@@ -224,9 +259,10 @@ impl EntryScore {
             Alpha(score) if adjust_retrieve(score, ply) <= alpha => Some(alpha),
             Beta(score) if adjust_retrieve(score, ply) >= beta => Some(beta),
             _ => None,
+            // PV(score) | Alpha(score) | Beta(score) => Some(score),
         }
 
-        // // adjust for checkmates
+        // adjust for checkmates
         // match score {
         //     score if score > MATED - MAX_DEPTH as i32 => Some(score - ply),
         //     score if score < CHECKMATE + MAX_DEPTH as i32 => Some(score + ply),
@@ -259,6 +295,50 @@ impl TTEntry {
             draft: draft as i8,
             best: best.unwrap_or(NULL_MOVE),
         }
+    }
+}
+
+impl Entry for TTEntry {
+    #[inline]
+    fn hash(&self) -> u64 {
+        self.hash
+    }
+
+    #[inline]
+    fn draft(&self) -> i8 {
+        self.draft
+    }
+
+    #[inline]
+    fn score(&self) -> EntryScore {
+        self.score
+    }
+
+    #[inline]
+    fn best_move(&self) -> Move {
+        self.best
+    }
+}
+
+impl Entry for RwLock<TTEntry> {
+    #[inline]
+    fn hash(&self) -> u64 {
+        self.read().unwrap().hash
+    }
+
+    #[inline]
+    fn draft(&self) -> i8 {
+        self.read().unwrap().draft
+    }
+
+    #[inline]
+    fn score(&self) -> EntryScore {
+        self.read().unwrap().score
+    }
+
+    #[inline]
+    fn best_move(&self) -> Move {
+        self.read().unwrap().best
     }
 }
 

@@ -12,9 +12,8 @@ ep, last castle state and last halfmove can all be stored in searchers - aha not
 
 use crate::board::{Board, PIECE_NAMES, WHITE};
 use crate::movegen::move_info::SQ_NAMES;
-use crate::movegen::move_list::CAP_SCORE_OFFSET;
 use crate::movegen::movegen::{get_piece, get_xpiece};
-use crate::search::searchers::MAX_DEPTH;
+use crate::search::searcher::MAX_DEPTH;
 use std::fmt::{Display, Formatter};
 
 const PREV_MOVE_SIZE: usize = 16384;
@@ -60,14 +59,46 @@ impl MoveType {
     }
 
     pub fn is_promo(&self) -> bool {
-        match self {
+        matches!(
+            self,
             MoveType::Promo
-            | MoveType::NPromoCap
-            | MoveType::BPromoCap
-            | MoveType::RPromoCap
-            | MoveType::QPromoCap => true,
+                | MoveType::NPromoCap
+                | MoveType::BPromoCap
+                | MoveType::RPromoCap
+                | MoveType::QPromoCap
+        )
+    }
 
-            _ => false,
+    pub fn is_cap(&self) -> bool {
+        matches!(
+            self,
+            MoveType::Cap
+                | MoveType::NPromoCap
+                | MoveType::BPromoCap
+                | MoveType::RPromoCap
+                | MoveType::QPromoCap
+                | MoveType::Ep
+        )
+    }
+}
+
+impl From<u32> for MoveType {
+    fn from(value: u32) -> Self {
+        match value {
+            0 => MoveType::Quiet,
+            1 => MoveType::Double,
+            2 => MoveType::Cap,
+            3 => MoveType::WKingSide,
+            4 => MoveType::BKingSide,
+            5 => MoveType::WQueenSide,
+            6 => MoveType::BQueenSide,
+            7 => MoveType::Promo,
+            8 => MoveType::NPromoCap,
+            9 => MoveType::RPromoCap,
+            10 => MoveType::BPromoCap,
+            11 => MoveType::QPromoCap,
+            12 => MoveType::Ep,
+            _ => panic!("unknown movetype with value = {}", value),
         }
     }
 }
@@ -136,8 +167,7 @@ impl Move {
 
     #[inline]
     pub fn move_type(&self) -> MoveType {
-        // shh no unsafe here ...
-        unsafe { std::mem::transmute_copy(&(self.0 & 0xF)) }
+        MoveType::from(self.0 & 0xF)
     }
 
     #[inline]
@@ -335,13 +365,13 @@ impl KillerMoves {
     }
 
     // returns an option containing an i32 for move scoring or none
-    pub fn get_move_score(&self, m: Move, depth: usize) -> Option<i32> {
+    pub fn get_move_priority(&self, m: Move, depth: usize) -> Option<i32> {
         let [k1, k2] = self.killer_moves[depth];
 
         if Some(m) == k1 {
-            Some(CAP_SCORE_OFFSET + 1)
+            Some(1)
         } else if Some(m) == k2 {
-            Some(CAP_SCORE_OFFSET)
+            Some(0)
         } else {
             None
         }

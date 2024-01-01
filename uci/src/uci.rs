@@ -1,7 +1,8 @@
-use crate::game_state::UciGameState;
+use crate::game_state::{CanSearch, GameState};
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, UciNewGame};
 use chess::board::Board;
 use chess::movegen::moves::{Move, PrevMoves};
+use chess::search::tt::TT;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -113,20 +114,26 @@ impl UciCommand {
     }
 }
 
-pub struct Uci<T: UciGameState> {
-    game_state: T,
+pub struct Uci<T: TT>
+where
+    GameState<T>: CanSearch,
+{
+    game_state: GameState<T>,
     uci_writer_out: UciWriter,
 }
 
-impl<T: UciGameState> Uci<T> {
-    pub fn new(game_state: T) -> Uci<T> {
+impl<T: TT> Uci<T>
+where
+    GameState<T>: CanSearch,
+{
+    pub fn new(game_state: GameState<T>) -> Uci<T> {
         Uci {
             game_state,
             uci_writer_out: UciWriter::new(),
         }
     }
 
-    pub fn new_with_out_file(game_state: T) -> Uci<T> {
+    pub fn new_with_out_file(game_state: GameState<T>) -> Uci<T> {
         Uci {
             game_state,
             uci_writer_out: UciWriter::new_with_file(),
@@ -144,13 +151,9 @@ impl<T: UciGameState> Uci<T> {
             };
 
             match command {
-                UciNewGame => self.game_state.new_game(),
-                UciInfo => writeln!(
-                    &mut self.uci_writer_out,
-                    "id name {AUTHOR}\nid author {BOT_NAME}\nuciok"
-                )
-                .unwrap(),
-                IsReady => self.game_state.is_ready(&mut self.uci_writer_out).unwrap(),
+                UciNewGame => self.handle_new_game(),
+                UciInfo => self.handle_uci_info(),
+                IsReady => self.handle_is_ready(),
                 Position(pos) => self.handle_position_command(pos),
                 Go(_) => self.handle_search(),
                 Quit => {
@@ -169,6 +172,23 @@ impl<T: UciGameState> Uci<T> {
 
         self.uci_writer_out.log_input(&buffer)?;
         UciCommand::new(&buffer).map_err(|err| err.into())
+    }
+
+    fn handle_uci_info(&mut self) {
+        writeln!(
+            &mut self.uci_writer_out,
+            "id name {AUTHOR}\nid author {BOT_NAME}\nuciok"
+        )
+        .unwrap()
+    }
+
+    fn handle_new_game(&mut self) {
+        self.game_state.new_game();
+    }
+
+    fn handle_is_ready(&mut self) {
+        while !self.game_state.is_ready() {} // hang till ready
+        writeln!(&mut self.uci_writer_out, "readyok").unwrap()
     }
 
     fn handle_position_command(&mut self, command: UciPositionCommand) {
@@ -251,6 +271,9 @@ impl Write for UciWriter {
         if let Some(file) = self.file.as_mut() {
             file.write_all(buf)?;
         }
+
+        // let out_str = std::str::from_utf8(buf);
+        // dbg!(out_str.unwrap());
 
         self.stdout.write(buf)
     }

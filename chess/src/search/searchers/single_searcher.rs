@@ -4,8 +4,8 @@ use crate::search::eval::PAWN_VALUE;
 use crate::search::search::root_pvs;
 use crate::search::searchers::{SeachResult, SearchError, Searcher, MAX_SCORE};
 use crate::search::searchers::{MAX_DEPTH, MIN_SCORE};
-use crate::search::tt::TTable;
-use crate::search::tt::{EntryScore, TTABLE_SIZE};
+use crate::search::tt::EntryScore;
+use crate::search::tt::TT;
 use crate::search::HistoryTable;
 use std::cmp::{max, min};
 use std::io::Write;
@@ -16,7 +16,7 @@ const TIME_LIMIT_MS: u128 = 1500;
 
 pub fn iterative_deepening(
     board: &Board,
-    tt: &mut TTable,
+    tt: &mut impl TT,
     prev_moves: &mut PrevMoves,
     out: &mut impl Write,
 ) -> SeachResult {
@@ -68,43 +68,13 @@ pub fn iterative_deepening(
     Ok(best_result)
 }
 
-fn print_stats(searcher: &SingleSearcher) {
-    let (hits, misses, cols, inserts, new_inserts, count) = searcher.tt.stats();
-
-    let total = hits + misses + cols;
-    let percent = (hits as f64 / total as f64) * 100.0;
-    let capacity = (count as f64 / TTABLE_SIZE as f64) * 100.0;
-    let occ_nodes = (count as f64 / searcher.nodes as f64) * 100.0;
-    let occ_inserts = (count as f64 / inserts as f64) * 100.0;
-    println!(
-        "{} hits, \
-                {} collisions, \
-                {} misses, \
-                {} total gets, \
-                {} inserts, \
-                {} new inserts, \
-                hit/miss+coll {:.2}%, \
-                nodes {}, \
-                tt occupied {}, \
-                tt capacity {:.2}%, \
-                occ/nodes {:.2}%, \
-                occ/inserts {:.2}%",
-        hits,
-        cols,
-        misses,
-        total,
-        inserts,
-        new_inserts,
-        percent,
-        searcher.nodes,
-        count,
-        capacity,
-        occ_nodes,
-        occ_inserts
-    );
-}
-
-fn root_search(s: &mut SingleSearcher, b: &Board, best_score: i32, depth: usize) -> SeachResult {
+#[allow(unused)]
+fn root_search<T: TT>(
+    s: &mut SingleSearcher<T>,
+    b: &Board,
+    best_score: i32,
+    depth: usize,
+) -> SeachResult {
     let mut alpha_window_width = 4;
     let mut beta_window_width = 4;
     let mut alpha_window = max(best_score - (PAWN_VALUE / alpha_window_width), MIN_SCORE);
@@ -144,20 +114,20 @@ fn root_search(s: &mut SingleSearcher, b: &Board, best_score: i32, depth: usize)
     }
 }
 
-struct SingleSearcher<'a> {
+struct SingleSearcher<'a, T: TT> {
     abort: bool,
     root_depth: i32,
     ply: i32,
     colour_multiplier: i32,
-    tt: &'a mut TTable,
+    tt: &'a mut T,
     km: KillerMoves,
     hh: HistoryTable,
     prev_moves: &'a mut PrevMoves,
     nodes: usize,
 }
 
-impl<'a> SingleSearcher<'a> {
-    pub fn new(tt: &'a mut TTable, prev_moves: &'a mut PrevMoves) -> SingleSearcher<'a> {
+impl<'a, T: TT> SingleSearcher<'a, T> {
+    pub fn new(tt: &'a mut T, prev_moves: &'a mut PrevMoves) -> SingleSearcher<'a, T> {
         SingleSearcher {
             abort: false,
             root_depth: 0,
@@ -176,7 +146,7 @@ impl<'a> SingleSearcher<'a> {
     }
 }
 
-impl<'a> Searcher for SingleSearcher<'a> {
+impl<'a, T: TT> Searcher for SingleSearcher<'a, T> {
     fn init_search(&mut self, b: &Board, depth: usize) {
         self.colour_multiplier = if b.ctm() == WHITE { 1 } else { -1 };
         self.ply = 0;
@@ -190,7 +160,6 @@ impl<'a> Searcher for SingleSearcher<'a> {
 
     fn probe_tt(&self, hash: u64, alpha: i32, beta: i32) -> Option<i32> {
         self.tt.get_score(hash, self.draft(), alpha, beta)
-        // None
     }
 
     fn store_tt(&mut self, hash: u64, score: EntryScore, best_move: Option<Move>) {
@@ -199,12 +168,10 @@ impl<'a> Searcher for SingleSearcher<'a> {
 
     fn get_tt_best_move(&self, hash: u64) -> Option<Move> {
         self.tt.get_bestmove(hash)
-        // None
     }
 
     fn get_tt_pv_move(&mut self, hash: u64) -> Option<Move> {
         self.tt.get_pv(hash)
-        // None
     }
 
     fn km_get(&self, depth: usize) -> [Option<Move>; 2] {
