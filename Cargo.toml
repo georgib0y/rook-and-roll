@@ -16,11 +16,22 @@ chrono = "0.4.22"
 
 [profile.dev]
 debug = 2
-#opt-level = 1
+debuginfo-level = 1
+# opt-level=1
+
 
 [profile.release]
 lto = true
+debug=2
+debuginfo-level = 1
 
 
 [profile.test]
-#opt-level = 3
+debug = 2
+
+[workspace]
+members = [
+    "chess",
+    "uci",
+    "web-dummy"
+]
