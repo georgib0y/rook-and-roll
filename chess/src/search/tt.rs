@@ -41,14 +41,6 @@ pub trait TT {
 
     fn get(&self, hash: u64) -> Option<&Self::Entry> {
         Some(self.get_entry(hash)).filter(|e| e.hash() != EMPTY_HASH)
-
-        // let entry = self.get_entry(hash);
-
-        // if entry.hash() == EMPTY_HASH {
-        //     None
-        // } else {
-        //     Some(entry)
-        // }
     }
 
     fn get_score(&self, hash: u64, draft: i32, alpha: i32, beta: i32) -> Option<i32> {
@@ -76,10 +68,7 @@ pub trait TT {
             _ => {}
         }
 
-        self.set_entry(
-            hash,
-            TTEntry::new(hash, score.adjust_insert(draft), best, draft),
-        )
+        self.set_entry(hash, TTEntry::new(hash, score, best, draft))
     }
 
     fn get_full_pv(&self, board: &Board) -> Vec<Move> {
@@ -98,7 +87,7 @@ pub trait TT {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct NoTTable {
     entry: TTEntry,
 }
@@ -138,7 +127,7 @@ impl TTable {
     }
 }
 
-impl TT for TTable {
+impl TT for &mut TTable {
     type Entry = TTEntry;
 
     fn get_entry(&self, hash: u64) -> &TTEntry {
@@ -236,21 +225,26 @@ impl Default for EntryScore {
 }
 
 impl EntryScore {
-    pub fn is_pv(self) -> bool {
-        matches!(self, EntryScore::PV(_))
+    pub fn new_pv(score: i32, ply: i32) -> EntryScore {
+        PV(adjust_insert(score, ply))
     }
 
-    pub fn adjust_insert(self, ply: i32) -> EntryScore {
-        match self {
-            PV(score) if score > MATED - MAX_DEPTH as i32 => PV(score + ply),
-            Alpha(score) if score > MATED - MAX_DEPTH as i32 => Alpha(score + ply),
-            Beta(score) if score > MATED - MAX_DEPTH as i32 => Beta(score + ply),
+    pub fn new_alpha(score: i32, ply: i32) -> EntryScore {
+        Alpha(adjust_insert(score, ply))
+    }
 
-            PV(score) if score < CHECKMATE + MAX_DEPTH as i32 => PV(score - ply),
-            Alpha(score) if score < CHECKMATE + MAX_DEPTH as i32 => Alpha(score - ply),
-            Beta(score) if score < CHECKMATE + MAX_DEPTH as i32 => Beta(score - ply),
-            _ => self,
+    pub fn new_beta(score: i32, ply: i32) -> EntryScore {
+        Beta(adjust_insert(score, ply))
+    }
+
+    fn score(self) -> i32 {
+        match self {
+            PV(score) | Alpha(score) | Beta(score) => score,
         }
+    }
+
+    pub fn is_pv(self) -> bool {
+        matches!(self, EntryScore::PV(_))
     }
 
     pub fn get_score(self, alpha: i32, beta: i32, ply: i32) -> Option<i32> {
@@ -259,22 +253,22 @@ impl EntryScore {
             Alpha(score) if adjust_retrieve(score, ply) <= alpha => Some(alpha),
             Beta(score) if adjust_retrieve(score, ply) >= beta => Some(beta),
             _ => None,
-            // PV(score) | Alpha(score) | Beta(score) => Some(score),
         }
+    }
+}
 
-        // adjust for checkmates
-        // match score {
-        //     score if score > MATED - MAX_DEPTH as i32 => Some(score - ply),
-        //     score if score < CHECKMATE + MAX_DEPTH as i32 => Some(score + ply),
-        //     _ => Some(score),
-        // }
+fn adjust_insert(score: i32, ply: i32) -> i32 {
+    match score {
+        score if score >= MATED - MAX_DEPTH as i32 => score + ply,
+        score if score <= CHECKMATE + MAX_DEPTH as i32 => score - ply,
+        _ => score,
     }
 }
 
 fn adjust_retrieve(score: i32, ply: i32) -> i32 {
     match score {
-        score if score > MATED - MAX_DEPTH as i32 => score - ply,
-        score if score < CHECKMATE + MAX_DEPTH as i32 => score + ply,
+        score if score >= MATED - MAX_DEPTH as i32 => score - ply,
+        score if score <= CHECKMATE + MAX_DEPTH as i32 => score + ply,
         _ => score,
     }
 }
@@ -388,5 +382,33 @@ impl PerftTTEntry {
         self.count = count;
         self.hash = hash;
         self.depth = depth;
+    }
+}
+
+#[test]
+fn tt_insert_and_retrieve_is_correct() {
+    crate::init();
+    use EntryScore::*;
+
+    let alpha = -50;
+    let beta = 50;
+
+    // (insert entry score, insert draft, retrieve draft, expected score)
+    let inserts = [
+        (PV(0), 0, 0, Some(0)),
+        (PV(0), 0, 1, None),
+        (Alpha(alpha - 1), 0, 0, Some(alpha)),
+        (Alpha(alpha + 1), 0, 0, None),
+        (Beta(beta + 1), 0, 0, Some(beta)),
+        (Beta(beta - 1), 0, 0, None),
+        (PV(CHECKMATE + 5), 5, 0, Some(CHECKMATE + 5)),
+    ];
+
+    let mut tt = &mut TTable::new();
+
+    for (i, (in_score, in_draft, ret_draft, exp_score)) in inserts.into_iter().enumerate() {
+        let hash = i as u64 + 1;
+        tt.insert(hash, in_score, None, in_draft);
+        assert_eq!(tt.get_score(hash, ret_draft, alpha, beta), exp_score);
     }
 }

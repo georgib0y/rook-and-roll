@@ -4,7 +4,7 @@ use chess::{
     board::Board,
     movegen::moves::PrevMoves,
     search::{
-        searcher::{iterative_deepening, SearchResult},
+        searcher::{iterative_deepening, lazy_smp, SearchResult},
         tt::{NoTTable, SmpTTable, TTable, TT},
     },
 };
@@ -13,7 +13,11 @@ pub trait CanSearch {
     fn go(&mut self, out: &mut impl Write) -> SearchResult;
 }
 
-pub struct GameState<T: TT> {
+trait HasTT<T: TT> {
+    fn tt(&mut self) -> T;
+}
+
+pub struct GameState<T> {
     tt: T,
     board: Board,
     prev_moves: PrevMoves,
@@ -53,9 +57,9 @@ impl GameState<Arc<SmpTTable>> {
     }
 }
 
-impl<T: TT> GameState<T> {
+impl<T> GameState<T> {
     pub fn new_game(&mut self) {
-        self.tt.clear()
+        // self.tt.clear()
     }
 
     pub fn is_ready(&self) -> bool {
@@ -76,12 +80,18 @@ impl CanSearch for GameState<TTable> {
 
 impl CanSearch for GameState<NoTTable> {
     fn go(&mut self, out: &mut impl Write) -> SearchResult {
-        iterative_deepening(&self.board, &mut self.tt, self.prev_moves.clone(), out)
+        iterative_deepening(&self.board, self.tt, self.prev_moves.clone(), out)
     }
 }
 
 impl CanSearch for GameState<Arc<SmpTTable>> {
     fn go(&mut self, out: &mut impl Write) -> SearchResult {
-        todo!()
+        lazy_smp(
+            &self.board,
+            self.tt.clone(),
+            self.prev_moves.clone(),
+            self.num_threads,
+            out,
+        )
     }
 }

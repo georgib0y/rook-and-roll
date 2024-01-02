@@ -1,7 +1,7 @@
 use crate::board::{Board, BLACK, WHITE};
 use crate::movegen::move_info::SQUARES;
 use crate::movegen::movegen::{get_all_attackers, NO_SQUARES};
-use crate::movegen::moves::{Move, MoveType};
+use crate::movegen::moves::Move;
 use crate::search::eval::PIECE_VALUES;
 use crate::search::searcher::Searcher;
 use crate::search::tt::TT;
@@ -15,6 +15,10 @@ const CAP_SCORE_MUL: i32 = 10000;
 pub trait MoveList: IntoIterator<Item = Move> {
     fn add_move(&mut self, m: Move);
     fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub struct StackMoveList<const N: usize = MAX_MOVES> {
@@ -69,14 +73,14 @@ pub struct ScoredMoveList<'a, T: TT, const N: usize> {
     moves: [(Move, i32); N],
     length: usize,
     board: &'a Board,
-    searcher: &'a Searcher<'a, T>,
+    searcher: &'a Searcher<T>,
     depth: usize,
 }
 
 impl<'a, T: TT> ScoredMoveList<'a, T, MAX_MOVES> {
     pub fn new(
         board: &'a Board,
-        searcher: &'a Searcher<'a, T>,
+        searcher: &'a Searcher<T>,
         depth: usize,
     ) -> ScoredMoveList<'a, T, MAX_MOVES> {
         ScoredMoveList {
@@ -92,7 +96,7 @@ impl<'a, T: TT> ScoredMoveList<'a, T, MAX_MOVES> {
 impl<'a, T: TT, const N: usize> ScoredMoveList<'a, T, N> {
     pub fn with_size(
         board: &'a Board,
-        searcher: &'a Searcher<'a, T>,
+        searcher: &'a Searcher<T>,
         depth: usize,
     ) -> ScoredMoveList<'a, T, N> {
         ScoredMoveList {
@@ -174,16 +178,11 @@ impl<'a, T: TT, const N: usize> MoveList for QSearchMoveList<'a, T, N> {
 pub struct ScoreMoveListIter<const N: usize> {
     moves: [(Move, i32); N],
     length: usize,
-    count: usize,
 }
 
 impl<const N: usize> ScoreMoveListIter<N> {
     fn new(moves: [(Move, i32); N], length: usize) -> ScoreMoveListIter<N> {
-        ScoreMoveListIter {
-            moves,
-            length,
-            count: 0,
-        }
+        ScoreMoveListIter { moves, length }
     }
 }
 
@@ -232,8 +231,12 @@ impl<const N: usize> Iterator for ScoreMoveListIter<N> {
 }
 
 pub fn score_move<T: TT>(b: &Board, s: &Searcher<T>, depth: usize, m: Move) -> i32 {
-    if s.tt.get_bestmove(b.hash()) == Some(m) {
+    if s.pv_table.get(s.ply as usize) == m {
         return BEST_MOVE_SCORE;
+    }
+
+    if s.tt.get_bestmove(b.hash()) == Some(m) {
+        return BEST_MOVE_SCORE - 1;
     }
 
     if m.move_type().is_cap() {
@@ -312,6 +315,7 @@ fn see_get_least_valuable(b: &Board, attackers: u64, depth: usize) -> (usize, u6
 #[test]
 fn test_see_scores() {
     use crate::board::{KNIGHT, ROOK};
+    use crate::movegen::moves::MoveType;
 
     crate::init();
 

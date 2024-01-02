@@ -4,10 +4,11 @@ use crate::uci::{Uci, UciWriter};
 use chess::board::Board;
 use chess::movegen::moves::PrevMoves;
 use chess::perft::HashPerft;
-use chess::search::searcher::iterative_deepening;
-use chess::search::tt::{NoTTable, TTable, TT};
+use chess::search::searcher::{iterative_deepening, lazy_smp};
+use chess::search::tt::{NoTTable, SmpTTable, TTable, TT};
 use game_state::GameState;
 use std::env::args;
+use std::sync::Arc;
 use std::time::Instant;
 
 mod game_state;
@@ -34,6 +35,9 @@ fn main() {
     }
 
     let mut uci = Uci::new(GameState::new_no_tt());
+    // let mut uci = Uci::new(GameState::new());
+
+    // let mut uci = Uci::new(GameState::new_smp(8));
     // let mut uci = Uci::new(GameStateMT::new(4));
 
     uci.start();
@@ -133,22 +137,28 @@ fn _do_perft() {
 }
 
 fn _do_search() {
+    let num_threads = 8;
+
     let b = Board::new();
-    let mut tt = TTable::new();
-    // let mut tt = NoTTable::default();
     let prev_moves = PrevMoves::new();
     let mut out = UciWriter::new();
 
     let start = Instant::now();
 
-    let res = iterative_deepening(&b, &mut tt, prev_moves, &mut out).unwrap();
+    let res = match num_threads {
+        0 => iterative_deepening(&b, NoTTable::default(), prev_moves, &mut out).unwrap(),
+        1 => iterative_deepening(&b, &mut TTable::new(), prev_moves, &mut out).unwrap(),
+        t => lazy_smp(&b, SmpTTable::new(), prev_moves, t, &mut out).unwrap(),
+    };
+
+    // let res = iterative_deepening(&b, &mut tt, prev_moves, &mut out).unwrap();
+
     println!(
         "bestmove: {} with score {}, took {}ms",
         res.1.as_uci_string(),
         res.0,
         start.elapsed().as_millis()
     );
-    tt.print_stats();
 }
 
 fn do_perftree() {

@@ -114,7 +114,7 @@ impl UciCommand {
     }
 }
 
-pub struct Uci<T: TT>
+pub struct Uci<T>
 where
     GameState<T>: CanSearch,
 {
@@ -122,7 +122,7 @@ where
     uci_writer_out: UciWriter,
 }
 
-impl<T: TT> Uci<T>
+impl<T> Uci<T>
 where
     GameState<T>: CanSearch,
 {

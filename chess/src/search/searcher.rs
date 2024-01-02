@@ -2,6 +2,7 @@ use std::{
     error::Error,
     fmt::{Display, Formatter},
     io::Write,
+    sync::Arc,
     time::Instant,
 };
 
@@ -18,13 +19,13 @@ use crate::{
 use super::{
     eval::{eval, MATED, PIECE_VALUES},
     tt::{
-        EntryScore::{self, *},
-        TT,
+        EntryScore::{self},
+        SmpTTable, TT,
     },
     HistoryTable,
 };
 
-const TIME_LIMIT_MS: u128 = 30000;
+const TIME_LIMIT_MS: u128 = 5000;
 pub const MAX_DEPTH: usize = 100;
 pub const MIN_SCORE: i32 = CHECKMATE * 2;
 const MAX_SCORE: i32 = -MIN_SCORE;
@@ -51,22 +52,64 @@ impl Error for SearchError {}
 
 pub type SearchResult = Result<(i32, Move), SearchError>;
 
-pub struct Searcher<'a, T: TT> {
+pub struct PVTable {
+    table: Box<[Move]>,
+}
+
+impl Default for PVTable {
+    fn default() -> Self {
+        let size = MAX_DEPTH * (MAX_DEPTH + 1) / 2;
+        PVTable {
+            table: vec![Move::default(); size].into_boxed_slice(),
+        }
+    }
+}
+
+impl PVTable {
+    fn idx_from_ply(ply: usize) -> usize {
+        ply * (2 * MAX_DEPTH + 1 - ply) / 2
+    }
+
+    pub fn get(&self, ply: usize) -> Move {
+        self.table[PVTable::idx_from_ply(ply)]
+    }
+
+    fn set(&mut self, ply: usize, m: Move) {
+        let ply_idx = PVTable::idx_from_ply(ply);
+        self.table[ply_idx] = m;
+
+        let next_ply_idx = PVTable::idx_from_ply(ply + 1);
+        let end = next_ply_idx + MAX_DEPTH - ply - 1;
+
+        self.table.copy_within(next_ply_idx..end, ply_idx + 1)
+    }
+
+    fn get_pv_line(&self) -> Vec<Move> {
+        self.table
+            .iter()
+            .copied()
+            .take_while(|m| *m != NULL_MOVE)
+            .collect()
+    }
+}
+
+pub struct Searcher<T: TT> {
     aborted: bool,
     start: Instant,
     time_limit_ms: u128,
     root_depth: i32,
-    ply: i32,
+    pub ply: i32,
     c_mul: i32,
-    pub tt: &'a mut T,
+    pub tt: T,
+    pub pv_table: PVTable,
     pub km: KillerMoves,
     pub hh: HistoryTable,
     prev_moves: PrevMoves,
     nodes: usize,
 }
 
-impl<'a, T: TT> Searcher<'a, T> {
-    fn new(tt: &'a mut T, prev_moves: PrevMoves, time_limit_ms: u128) -> Searcher<T> {
+impl<T: TT> Searcher<T> {
+    fn new(tt: T, prev_moves: PrevMoves, time_limit_ms: u128) -> Searcher<T> {
         Searcher {
             aborted: false,
             start: Instant::now(),
@@ -75,6 +118,7 @@ impl<'a, T: TT> Searcher<'a, T> {
             ply: 0,
             c_mul: 0,
             tt,
+            pv_table: PVTable::default(),
             km: KillerMoves::new(),
             hh: HistoryTable::new(),
             prev_moves,
@@ -169,7 +213,7 @@ impl<'a, T: TT> Searcher<'a, T> {
         gen_moves(b, &mut ml, is_in_check(b));
 
         let mut best_res = None;
-        let mut tt_entry_score = Alpha(alpha);
+        let mut tt_entry_score = EntryScore::new_alpha(alpha, self.ply);
 
         for m in ml {
             let Some(score) = self.try_move(b, m, alpha, beta, depth) else {
@@ -179,11 +223,17 @@ impl<'a, T: TT> Searcher<'a, T> {
             if score > alpha {
                 alpha = score;
                 best_res = Some((alpha, m));
-                tt_entry_score = PV(alpha);
+                tt_entry_score = EntryScore::new_pv(alpha, self.ply);
+                self.pv_table.set(self.ply as usize, m);
             }
 
             if score >= beta {
-                self.tt.insert(b.hash(), Beta(beta), Some(m), self.draft());
+                self.tt.insert(
+                    b.hash(),
+                    EntryScore::new_beta(beta, self.ply),
+                    Some(m),
+                    self.draft(),
+                );
                 best_res = Some((beta, m));
 
                 return best_res;
@@ -204,7 +254,12 @@ impl<'a, T: TT> Searcher<'a, T> {
 
         if depth == 0 {
             let q_score = self.q_search(b, alpha, beta);
-            self.tt.insert(b.hash(), PV(q_score), None, self.draft());
+            self.tt.insert(
+                b.hash(),
+                EntryScore::new_pv(q_score, self.ply),
+                None,
+                self.draft(),
+            );
             return q_score;
         }
 
@@ -212,10 +267,13 @@ impl<'a, T: TT> Searcher<'a, T> {
             return score;
         }
 
+        // TODO is this needed?
+        self.pv_table.table[PVTable::idx_from_ply(self.ply as usize)] = NULL_MOVE;
+
         let in_check = is_in_check(b);
 
         let mut best_move = None;
-        let mut tt_entry_score = Alpha(alpha);
+        let mut tt_entry_score = EntryScore::new_alpha(alpha, self.ply);
 
         let mut ml = ScoredMoveList::new(b, self, depth);
         gen_moves(b, &mut ml, in_check);
@@ -245,7 +303,7 @@ impl<'a, T: TT> Searcher<'a, T> {
             };
 
             if score >= beta {
-                self.store_tt(b.hash(), Beta(beta), Some(m));
+                self.store_tt(b.hash(), EntryScore::new_beta(beta, self.ply), Some(m));
 
                 if m.move_type() == MoveType::Quiet {
                     self.km.add(m, depth);
@@ -259,8 +317,9 @@ impl<'a, T: TT> Searcher<'a, T> {
             if score > alpha {
                 alpha = score;
                 best_move = Some(m);
-                tt_entry_score = PV(alpha);
+                tt_entry_score = EntryScore::new_pv(alpha, self.ply);
                 found_pv = true;
+                self.pv_table.set(self.ply as usize, m);
             }
         }
 
@@ -271,7 +330,7 @@ impl<'a, T: TT> Searcher<'a, T> {
                 STALEMATE
             };
 
-            tt_entry_score = PV(alpha);
+            tt_entry_score = EntryScore::new_pv(alpha, self.ply);
         }
 
         self.store_tt(b.hash(), tt_entry_score, best_move);
@@ -345,9 +404,9 @@ impl<'a, T: TT> Searcher<'a, T> {
     }
 }
 
-pub fn iterative_deepening<'a>(
-    board: &'a Board,
-    tt: &'a mut impl TT,
+pub fn iterative_deepening(
+    board: &Board,
+    tt: impl TT,
     prev_moves: PrevMoves,
     out: &mut impl Write,
 ) -> SearchResult {
@@ -373,24 +432,94 @@ pub fn iterative_deepening<'a>(
     res.ok_or(SearchError::NoMove)
 }
 
+pub fn lazy_smp(
+    board: &Board,
+    tt: Arc<SmpTTable>,
+    prev_moves: PrevMoves,
+    num_threads: usize,
+    out: &mut impl Write,
+) -> SearchResult {
+    let mut res = None;
+
+    let mut smp = LazySmp::new(tt, prev_moves, TIME_LIMIT_MS, num_threads);
+
+    for depth in 1..MAX_DEPTH {
+        let iter_res = smp.run_iter(board, depth);
+
+        if iter_res.is_none() {
+            break;
+        }
+
+        res = iter_res;
+
+        write_info(out, &smp.main, board, res, depth);
+    }
+
+    res.ok_or(SearchError::NoMove)
+}
+
+struct LazySmp {
+    main: Searcher<Arc<SmpTTable>>,
+    helpers: Vec<Searcher<Arc<SmpTTable>>>,
+}
+
+impl LazySmp {
+    fn new(
+        tt: Arc<SmpTTable>,
+        prev_moves: PrevMoves,
+        time_limit_ms: u128,
+        num_threads: usize,
+    ) -> LazySmp {
+        LazySmp {
+            main: Searcher::new(tt.clone(), prev_moves.clone(), time_limit_ms),
+            helpers: (1..num_threads)
+                .map(|_| Searcher::new(tt.clone(), prev_moves.clone(), time_limit_ms))
+                .collect(),
+        }
+    }
+
+    fn run_iter(&mut self, board: &Board, depth: usize) -> Option<(i32, Move)> {
+        let alpha_window = MIN_SCORE;
+        let beta_window = MAX_SCORE;
+
+        let mut iter_res = None;
+        std::thread::scope(|scope| {
+            for h in self.helpers.iter_mut() {
+                scope.spawn(|| h.root_pvs(board, alpha_window, beta_window, depth));
+            }
+
+            let res = self.main.root_pvs(board, alpha_window, beta_window, depth);
+
+            if !self.main.has_aborted() {
+                iter_res = res
+            }
+        });
+
+        iter_res
+    }
+}
+
 fn write_info<T: TT>(
     out: &mut impl Write,
     s: &Searcher<T>,
-    b: &Board,
+    _b: &Board,
     res: Option<(i32, Move)>,
     depth: usize,
 ) {
     let pv_str =
-        s.tt.get_full_pv(b)
+        // s.tt.get_full_pv(b)
+        s.pv_table.get_pv_line()
             .iter()
             .fold(String::new(), |pv, m| pv + &m.as_uci_string() + " ");
+
+    // dbg!(&s.pv_table.table[..10]);
 
     let (score, _) = res.unwrap_or((MIN_SCORE, NULL_MOVE));
 
     let nps = s.nodes as f64 / s.start.elapsed().as_secs_f64();
     writeln!(
         out,
-        "info depth {} score cp {} nps {:.0} {}",
+        "info depth {} score cp {} nps {:.0} pv {}",
         depth, score, nps, pv_str
     )
     .unwrap();
@@ -400,4 +529,23 @@ fn delta_prune(b: &Board, alpha: i32, eval: i32, m: Move) -> bool {
     eval + PIECE_VALUES[m.xpiece() as usize] + 200 < alpha
         && !m.move_type().is_promo()
         && (b.all_occ() ^ b.pawns(WHITE) ^ b.pawns(BLACK)).count_ones() > 4
+}
+
+#[test]
+fn pv_table_sets_pv_line() {
+    crate::init();
+
+    let pv_line: Vec<_> = (1..10).map(Move::_new_from_u32).collect();
+
+    let mut pv_table = PVTable::default();
+
+    for (ply, m) in pv_line.iter().enumerate().rev() {
+        pv_table.set(ply, *m);
+    }
+
+    assert_eq!(pv_table.get_pv_line(), pv_line);
+
+    for (ply, m) in pv_line.iter().enumerate().rev() {
+        assert_eq!(pv_table.get(ply), *m);
+    }
 }

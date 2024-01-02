@@ -596,7 +596,6 @@ fn inc_value_update() {
 fn test_inc_values_and_hash_copy_make() {
     crate::init();
     use crate::board::board::*;
-    use crate::search::eval::*;
 
     let tests = vec![
         (
