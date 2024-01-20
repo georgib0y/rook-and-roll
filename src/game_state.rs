@@ -11,6 +11,7 @@ pub trait CanSearch {
     fn new_game(&mut self);
     fn go(&mut self) -> SearchResult;
 }
+
 pub struct GameState<T> {
     tt: T,
     board: Board,

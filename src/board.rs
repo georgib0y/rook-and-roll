@@ -190,10 +190,6 @@ impl Board {
         board.hash ^= Zorb::colour();
         board.ctm ^= 1;
 
-        // let (mg, eg) = gen_board_value(&board);
-        // assert_eq!(board.mg_value, mg);
-        // assert_eq!(board.eg_value, eg);
-
         board
     }
 
@@ -240,6 +236,7 @@ impl Board {
             self.hash ^= Zorb::castle_rights(BQS_STATE);
         }
     }
+
     fn apply_move(&mut self, to: usize, piece: usize, xpiece: usize, move_type: MoveType) {
         match move_type {
             MoveType::Quiet => self.apply_quiet(piece),
@@ -259,7 +256,7 @@ impl Board {
     }
 
     fn apply_quiet(&mut self, piece: usize) {
-        self.halfmove *= (piece > 1) as u16;
+        self.halfmove *= (piece >= KNIGHT) as u16;
     }
 
     fn apply_double(&mut self, to: usize) {

@@ -4,6 +4,7 @@ use crate::moves::PrevMoves;
 use crate::perft::HashPerft;
 use crate::searcher::{iterative_deepening, lazy_smp};
 use crate::uci::Uci;
+use http::run_http;
 use std::env::args;
 use std::time::Instant;
 use tt::{NoTTable, SmpTTable, TTable};
@@ -17,6 +18,7 @@ pub mod eval;
 pub mod fen;
 pub mod game_state;
 pub mod hh;
+pub mod http;
 pub mod magic;
 pub mod move_info;
 pub mod move_list;
@@ -32,7 +34,8 @@ pub fn init() {
     MT::init();
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     crate::init();
 
     if args().count() > 1 {
@@ -47,6 +50,10 @@ fn main() {
         }
         "perft" => {
             _do_perft();
+            return;
+        }
+        "http" => {
+            run_http().await;
             return;
         }
         _ => {}

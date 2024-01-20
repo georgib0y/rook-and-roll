@@ -1,14 +1,15 @@
 use crate::board::Board;
 use crate::game_state::{CanSearch, GameState};
 use crate::moves::{Move, PrevMoves};
+use crate::searcher::SearchError;
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, UciNewGame};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::BufRead;
 
-const AUTHOR: &str = "George";
-const BOT_NAME: &str = "RookNRoll";
+pub const AUTHOR: &str = "George";
+pub const BOT_NAME: &str = "RookNRoll";
 
 #[derive(Debug)]
 pub enum InvalidUciCommand {
@@ -117,17 +118,31 @@ pub trait Uci: CanSearch {
                 }
             };
 
-            match command {
-                UciNewGame => self.handle_new_game(),
-                UciInfo => self.handle_uci_info(),
-                IsReady => self.handle_is_ready(),
-                Position { fen, moves } => self.handle_position_command(fen, moves),
-                Go(_) => self.handle_search(),
-                Quit => {
-                    eprintln!("Bye");
-                    return;
-                }
+            if let Quit = command {
+                eprintln!("Bye");
+                return;
             }
+
+            if let Some(out) = self.do_command(command) {
+                println!("{}", out);
+            }
+        }
+    }
+
+    fn do_command(&mut self, command: UciCommand) -> Option<String> {
+        match command {
+            UciNewGame => {
+                self.handle_new_game();
+                None
+            }
+            UciInfo => Some(self.handle_uci_info()),
+            IsReady => Some(self.handle_is_ready()),
+            Position { fen, moves } => {
+                self.handle_position_command(fen, moves);
+                None
+            }
+            Go(_) => self.handle_search().ok(),
+            _ => None,
         }
     }
 
@@ -138,17 +153,17 @@ pub trait Uci: CanSearch {
         UciCommand::new(&buffer)
     }
 
-    fn handle_uci_info(&mut self) {
-        println!("id name {AUTHOR}\nid author {BOT_NAME}\nuciok")
+    fn handle_uci_info(&mut self) -> String {
+        format!("id name {AUTHOR}\nid author {BOT_NAME}\nuciok")
     }
 
     fn handle_new_game(&mut self) {
         self.new_game();
     }
 
-    fn handle_is_ready(&mut self) {
+    fn handle_is_ready(&mut self) -> String {
         while !self.get_is_ready() {} // hang till ready
-        println!("readyok")
+        "readyok".into()
     }
 
     fn get_is_ready(&mut self) -> bool;
@@ -179,16 +194,9 @@ pub trait Uci: CanSearch {
 
     fn set_pos(&mut self, board: Board, prev_moves: PrevMoves);
 
-    fn handle_search(&mut self) {
-        let best_move = match self.go() {
-            Ok((_, best_move)) => best_move,
-            Err(err) => {
-                eprintln!("Could not get best move: {err}");
-                return;
-            }
-        };
-
-        println!("bestmove {}", best_move.as_uci_string());
+    fn handle_search(&mut self) -> Result<String, SearchError> {
+        self.go()
+            .map(|(_, best_move)| format!("bestmove {}", best_move.as_uci_string()))
     }
 }
 

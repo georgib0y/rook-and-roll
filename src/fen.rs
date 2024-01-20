@@ -178,21 +178,13 @@ impl Board {
         let white = pieces[0] | pieces[2] | pieces[4] | pieces[6] | pieces[8] | pieces[10];
         let black = pieces[1] | pieces[3] | pieces[5] | pieces[7] | pieces[9] | pieces[11];
 
-        let ctm = ctm_from_fen(fen)?;
-
-        let castle_state = castle_state_from_fen(fen)?;
-
-        let ep = ep_sq_from_fen(fen)?;
-
-        let halfmove = halfmove_from_fen(fen)?;
-
         let mut board = Board {
             pieces,
             util: [white, black, white | black],
-            ctm,
-            castle_state,
-            ep,
-            halfmove,
+            ctm: ctm_from_fen(fen)?,
+            castle_state: castle_state_from_fen(fen)?,
+            ep: ep_sq_from_fen(fen)?,
+            halfmove: halfmove_from_fen(fen)?,
             hash: 0,
             mg_value: 0,
             eg_value: 0,
