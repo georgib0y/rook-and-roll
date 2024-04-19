@@ -15,6 +15,7 @@ chrono = "0.4.22"
 axum = "0.7.3"
 tokio = { version = "1.35.1", features = ["full"] }
 tower = "0.4.13"
+thiserror = "1.0.56"
 
 
 [profile.dev]

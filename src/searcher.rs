@@ -1,12 +1,8 @@
-use std::{
-    error::Error,
-    fmt::{Display, Formatter},
-    sync::Arc,
-    time::Instant,
-};
+use std::{sync::Arc, time::Instant};
 
 use crate::{
     board::{Board, BLACK, KING, WHITE},
+    error::SearchError,
     eval::{eval, MATED, PIECE_VALUES},
     eval::{CHECKMATE, STALEMATE},
     hh::HistoryTable,
@@ -24,25 +20,6 @@ pub const MAX_DEPTH: usize = 100;
 pub const MIN_SCORE: i32 = CHECKMATE * 2;
 const MAX_SCORE: i32 = -MIN_SCORE;
 const QSEARCH_MAX_PLY: usize = 50;
-
-#[derive(Debug)]
-pub enum SearchError {
-    NoMove,
-    FailLow,
-    FailHigh,
-}
-
-impl Display for SearchError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SearchError::NoMove => writeln!(f, "No moves found"),
-            SearchError::FailLow => writeln!(f, "Failed low"),
-            SearchError::FailHigh => writeln!(f, "Failed high"),
-        }
-    }
-}
-
-impl Error for SearchError {}
 
 pub type SearchResult = Result<(i32, Move), SearchError>;
 
@@ -169,6 +146,7 @@ impl<T: TT> Searcher<T> {
     ) -> Option<i32> {
         let b = board.copy_make(m);
 
+        // TODO test to see order of these checks performance
         if !is_legal_move(&b, m, &self.prev_moves) || moved_into_check(&b, m) {
             return None;
         }
@@ -354,6 +332,24 @@ impl<T: TT> Searcher<T> {
 
         Some(score)
     }
+
+    // fn q_search(&mut self, b: &Board, mut alpha: i32, beta: i32) -> i32 {
+    //     let eval = eval(b, self.c_mul);
+
+    //     if self.ply > QSEARCH_MAX_PLY as i32 {
+    //         return eval;
+    //     }
+
+    //     if eval >= beta {
+    //         return beta;
+    //     }
+
+    //     if alpha < eval {
+    //         alpha = eval;
+    //     }
+
+    //     alpha
+    // }
 
     fn q_search(&mut self, b: &Board, mut alpha: i32, beta: i32) -> i32 {
         // TODO maybe only check for check when entering q_search

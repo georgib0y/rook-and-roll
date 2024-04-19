@@ -1,34 +1,7 @@
 use crate::board::{gen_hash, Board};
+use crate::error::InvalidFenError;
 use crate::eval::gen_board_value;
 use crate::move_info::SQUARES;
-use std::error::Error;
-use std::fmt;
-use std::fmt::{Display, Formatter};
-
-#[derive(Debug)]
-pub enum InvalidFenError {
-    InvalidPieces,
-    InvalidCTM,
-    InvalidCastleState,
-    InvalidEpSquare,
-    InvalidHalfmove,
-}
-
-impl Display for InvalidFenError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let msg = match self {
-            InvalidFenError::InvalidPieces => "Invalid Pieces",
-            InvalidFenError::InvalidCTM => "Invalid CTM",
-            InvalidFenError::InvalidCastleState => "Invalid Castle state",
-            InvalidFenError::InvalidEpSquare => "Invalid Ep square",
-            InvalidFenError::InvalidHalfmove => "Invalid Halfmove",
-        };
-
-        write!(f, "Invalid fen: {msg}")
-    }
-}
-
-impl Error for InvalidFenError {}
 
 fn piece_from_char(name: char) -> Option<usize> {
     match name {

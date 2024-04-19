@@ -1,34 +1,13 @@
 use crate::board::Board;
+use crate::error::{InvalidUciCommand, SearchError};
 use crate::game_state::{CanSearch, GameState};
 use crate::moves::{Move, PrevMoves};
-use crate::searcher::SearchError;
 use crate::uci::UciCommand::{Go, IsReady, Position, Quit, UciInfo, UciNewGame};
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::BufRead;
 
 pub const AUTHOR: &str = "George";
 pub const BOT_NAME: &str = "RookNRoll";
-
-#[derive(Debug)]
-pub enum InvalidUciCommand {
-    UnknownCommand(String),
-    InvalidPositionCommand(String),
-}
-
-impl Display for InvalidUciCommand {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            InvalidUciCommand::UnknownCommand(cmd) => format!("Unknown UCI command: {cmd}"),
-            InvalidUciCommand::InvalidPositionCommand(pos) => format!("Invalid position: {pos}"),
-        };
-
-        writeln!(f, "{}", s)
-    }
-}
-
-impl Error for InvalidUciCommand {}
 
 pub enum UciCommand {
     UciNewGame,

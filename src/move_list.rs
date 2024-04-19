@@ -35,6 +35,10 @@ impl<const N: usize> StackMoveList<N> {
             length: 0,
         }
     }
+
+    pub fn contains_move(self, m: Move) -> bool {
+        self.into_iter().any(|iter_move| m == iter_move)
+    }
 }
 
 impl Default for StackMoveList {
