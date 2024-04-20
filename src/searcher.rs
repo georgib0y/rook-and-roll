@@ -120,10 +120,6 @@ impl<T: TT> Searcher<T> {
         }
     }
 
-    fn draft(&self) -> i32 {
-        self.root_depth - self.ply
-    }
-
     fn init_search(&mut self, b: &Board, depth: usize) {
         self.c_mul = if b.ctm() == WHITE { 1 } else { -1 };
         self.ply = 0;
@@ -150,13 +146,13 @@ impl<T: TT> Searcher<T> {
         self.c_mul = -self.c_mul;
     }
 
-    fn store_tt(&mut self, hash: u64, score: EntryScore, bm: Option<Move>) {
+    fn store_tt(&mut self, hash: u64, score: EntryScore, depth: usize, bm: Option<Move>) {
         // do not store anything after abort
         if self.aborted {
             return;
         }
 
-        self.tt.insert(hash, score, bm, self.draft());
+        self.tt.insert(hash, score, bm, depth as i8);
     }
 
     fn try_move(
@@ -226,7 +222,7 @@ impl<T: TT> Searcher<T> {
                     b.hash(),
                     EntryScore::new_beta(beta, self.ply),
                     Some(m),
-                    self.draft(),
+                    depth as i8,
                 );
                 best_res = Some((beta, m));
 
@@ -234,7 +230,7 @@ impl<T: TT> Searcher<T> {
             }
         }
 
-        self.store_tt(b.hash(), tt_entry_score, best_res.map(|b| b.1));
+        self.store_tt(b.hash(), tt_entry_score, depth, best_res.map(|b| b.1));
 
         best_res
     }
@@ -247,20 +243,22 @@ impl<T: TT> Searcher<T> {
         self.nodes += 1;
 
         if depth == 0 {
+            // prevent qsearch if in check
+            if is_in_check(b) {
+                return self.pvs(b, alpha, beta, 1);
+            }
+
             let q_score = self.q_search(b, alpha, beta);
             self.tt.insert(
                 b.hash(),
                 EntryScore::new_pv(q_score, self.ply),
                 None,
-                self.draft(),
+                depth as i8,
             );
             return q_score;
         }
 
-        if let Some(score) = self
-            .tt
-            .get_score(b.hash(), self.draft(), self.ply, alpha, beta)
-        {
+        if let Some(score) = self.tt.get_score(b.hash(), depth, self.ply, alpha, beta) {
             return score;
         }
 
@@ -300,7 +298,12 @@ impl<T: TT> Searcher<T> {
             };
 
             if score >= beta {
-                self.store_tt(b.hash(), EntryScore::new_beta(beta, self.ply), Some(m));
+                self.store_tt(
+                    b.hash(),
+                    EntryScore::new_beta(beta, self.ply),
+                    depth,
+                    Some(m),
+                );
 
                 if m.move_type() == MoveType::Quiet {
                     self.km.add(m, depth);
@@ -330,7 +333,7 @@ impl<T: TT> Searcher<T> {
             tt_entry_score = EntryScore::new_pv(alpha, self.ply);
         }
 
-        self.store_tt(b.hash(), tt_entry_score, best_move);
+        self.store_tt(b.hash(), tt_entry_score, depth, best_move);
         alpha
     }
 
@@ -344,7 +347,7 @@ impl<T: TT> Searcher<T> {
     ) -> Option<i32> {
         let b = board.copy_make(m);
 
-        if moved_into_check(&b, m) || delta_prune(&b, alpha, eval, m) {
+        if delta_prune(&b, alpha, eval, m) {
             return None;
         }
 
@@ -356,11 +359,6 @@ impl<T: TT> Searcher<T> {
     }
 
     fn q_search(&mut self, b: &Board, mut alpha: i32, beta: i32) -> i32 {
-        // TODO maybe only check for check when entering q_search
-        if self.draft() > -2 && is_in_check(b) {
-            return self.pvs(b, alpha, beta, 1);
-        }
-
         let eval = eval(b, self.c_mul);
 
         // TODO maybe return alpha instead of stand-pat?

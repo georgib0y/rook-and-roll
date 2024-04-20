@@ -56,14 +56,20 @@ pub const LEFT_DIR: usize = 7;
 pub struct RAYS;
 
 impl RAYS {
-    pub const fn get(dir: usize, sq: usize) -> u64 {
-        RAY_ARRAY[dir][sq]
+    pub fn init() {
+        unsafe {
+            RAY_ARRAY = gen_rays();
+        }
+    }
+
+    pub fn get(dir: usize, sq: usize) -> u64 {
+        unsafe { RAY_ARRAY[dir][sq] }
     }
 }
 
-pub const RAY_ARRAY: [[u64; 65]; 8] = gen_rays();
+pub static mut RAY_ARRAY: [[u64; 65]; 8] = [[0; 65]; 8];
 
-const fn gen_rays() -> [[u64; 65]; 8] {
+fn gen_rays() -> [[u64; 65]; 8] {
     let (up, down) = gen_vertical();
     let (right, left) = gen_horizontal();
     let (up_right, down_left) = gen_pos_diagonal();
@@ -73,11 +79,12 @@ const fn gen_rays() -> [[u64; 65]; 8] {
         up_left, up, up_right, right, down_right, down, down_left, left,
     ]
 }
-const fn get_above_below(ray: u64, sq: u64) -> (u64, u64) {
+
+fn get_above_below(ray: u64, sq: u64) -> (u64, u64) {
     (ray & (sq ^ sq.wrapping_neg()), ray & (sq - 1))
 }
 
-const fn gen_vertical() -> ([u64; 65], [u64; 65]) {
+fn gen_vertical() -> ([u64; 65], [u64; 65]) {
     let mut up = [0; 65];
     let mut down = [0; 65];
     let mut i = 0;
@@ -88,7 +95,7 @@ const fn gen_vertical() -> ([u64; 65], [u64; 65]) {
     (up, down)
 }
 
-const fn gen_horizontal() -> ([u64; 65], [u64; 65]) {
+fn gen_horizontal() -> ([u64; 65], [u64; 65]) {
     let mut right = [0; 65];
     let mut left = [0; 65];
     let mut i = 0;
@@ -100,7 +107,7 @@ const fn gen_horizontal() -> ([u64; 65], [u64; 65]) {
 }
 
 // https://www.chessprogramming.org/On_an_empty_Board#Line_Attacks
-const fn gen_pos_diagonal() -> ([u64; 65], [u64; 65]) {
+fn gen_pos_diagonal() -> ([u64; 65], [u64; 65]) {
     const DIAG: u64 = 0x8040201008040201;
 
     let mut up_right = [0; 65];
@@ -122,7 +129,7 @@ const fn gen_pos_diagonal() -> ([u64; 65], [u64; 65]) {
     (up_right, down_left)
 }
 
-const fn gen_neg_diagonal() -> ([u64; 65], [u64; 65]) {
+fn gen_neg_diagonal() -> ([u64; 65], [u64; 65]) {
     const DIAG: u64 = 0x0102040810204080;
 
     let mut up_left = [0; 65];
@@ -148,42 +155,50 @@ const fn gen_neg_diagonal() -> ([u64; 65], [u64; 65]) {
 pub struct PST;
 
 impl PST {
+    pub fn init() {
+        unsafe {
+            MID_PST = [
+                WPAWN_MID_PST,
+                flip_pst(WPAWN_MID_PST),
+                WKNIGHT_MID_PST,
+                flip_pst(WKNIGHT_MID_PST),
+                WROOK_MID_PST,
+                flip_pst(WROOK_MID_PST),
+                WBISHOP_MID_PST,
+                flip_pst(WBISHOP_MID_PST),
+                WQUEEN_MID_PST,
+                flip_pst(WQUEEN_MID_PST),
+                WKING_MID_PST,
+                flip_pst(WKING_MID_PST),
+            ];
+
+            END_PST = [
+                WPAWN_END_PST,
+                flip_pst(WPAWN_END_PST),
+                WKNIGHT_END_PST,
+                flip_pst(WKNIGHT_END_PST),
+                WROOK_END_PST,
+                flip_pst(WROOK_END_PST),
+                WBISHOP_END_PST,
+                flip_pst(WBISHOP_END_PST),
+                WQUEEN_END_PST,
+                flip_pst(WQUEEN_END_PST),
+                WKING_END_PST,
+                flip_pst(WKING_END_PST),
+            ]
+        }
+    }
+
     pub fn pst(piece: usize, sq: usize) -> (i16, i16) {
-        (MID_PST[piece][sq], END_PST[piece][sq])
+        unsafe { (MID_PST[piece][sq], END_PST[piece][sq]) }
     }
 }
 
-const MID_PST: [[i16; 64]; 12] = [
-    WPAWN_MID_PST,
-    flip_pst(WPAWN_MID_PST),
-    WKNIGHT_MID_PST,
-    flip_pst(WKNIGHT_MID_PST),
-    WROOK_MID_PST,
-    flip_pst(WROOK_MID_PST),
-    WBISHOP_MID_PST,
-    flip_pst(WBISHOP_MID_PST),
-    WQUEEN_MID_PST,
-    flip_pst(WQUEEN_MID_PST),
-    WKING_MID_PST,
-    flip_pst(WKING_MID_PST),
-];
+static mut MID_PST: [[i16; 64]; 12] = [[0; 64]; 12];
 
-const END_PST: [[i16; 64]; 12] = [
-    WPAWN_END_PST,
-    flip_pst(WPAWN_END_PST),
-    WKNIGHT_END_PST,
-    flip_pst(WKNIGHT_END_PST),
-    WROOK_END_PST,
-    flip_pst(WROOK_END_PST),
-    WBISHOP_END_PST,
-    flip_pst(WBISHOP_END_PST),
-    WQUEEN_END_PST,
-    flip_pst(WQUEEN_END_PST),
-    WKING_END_PST,
-    flip_pst(WKING_END_PST),
-];
+static mut END_PST: [[i16; 64]; 12] = [[0; 64]; 12];
 
-const fn flip_pst(wpst: [i16; 64]) -> [i16; 64] {
+fn flip_pst(wpst: [i16; 64]) -> [i16; 64] {
     let mut bpst = [0; 64];
 
     let mut i = 0;
@@ -275,10 +290,10 @@ const WKING_END_PST: [i16; 64] = [
     45, 44, 13, -12, 17, 14, 17, 17, 38, 23, 11, -74, -35, -18, -18, -11, 15, 4, -17,
 ];
 
-static PAWN_ATTACKS: [u64; 128] = gen_pawn_attack_table();
-static KNIGHT_MOVES: [u64; 64] = gen_knight_move_table();
-static KING_MOVES: [u64; 64] = gen_king_move_table();
-static SUPERRAYS: [u64; 64] = gen_superray();
+static mut PAWN_ATTACKS: [u64; 128] = [0; 128];
+static mut KNIGHT_MOVES: [u64; 64] = [0; 64];
+static mut KING_MOVES: [u64; 64] = [0; 64];
+static mut SUPERRAYS: [u64; 64] = [0; 64];
 static mut ROOK_MOVES: [[u64; 4096]; 64] = [[0; 4096]; 64];
 static mut BISHOP_MOVES: [[u64; 512]; 64] = [[0; 512]; 64];
 
@@ -286,23 +301,29 @@ pub struct MT;
 
 impl MT {
     pub fn init() {
-        gen_rook_move_table();
-        gen_bishop_move_table();
+        unsafe {
+            PAWN_ATTACKS = gen_pawn_attack_table();
+            KNIGHT_MOVES = gen_knight_move_table();
+            KING_MOVES = gen_king_move_table();
+            SUPERRAYS = gen_superray();
+            gen_rook_move_table();
+            gen_bishop_move_table();
+        }
     }
 
     #[inline]
     pub fn pawn_attacks(colour: usize, sq: usize) -> u64 {
-        PAWN_ATTACKS[sq + colour * 64]
+        unsafe { PAWN_ATTACKS[sq + colour * 64] }
     }
 
     #[inline]
     pub fn knight_moves(sq: usize) -> u64 {
-        KNIGHT_MOVES[sq]
+        unsafe { KNIGHT_MOVES[sq] }
     }
 
     #[inline]
     pub fn king_moves(sq: usize) -> u64 {
-        KING_MOVES[sq]
+        unsafe { KING_MOVES[sq] }
     }
 
     #[inline]
@@ -346,7 +367,7 @@ impl MT {
     }
 }
 
-const fn gen_pawn_attack_table() -> [u64; 128] {
+fn gen_pawn_attack_table() -> [u64; 128] {
     let mut pawn_attacks = [0; 64 * 2];
 
     let mut i = 0;
@@ -368,7 +389,7 @@ const fn gen_pawn_attack_table() -> [u64; 128] {
     pawn_attacks
 }
 
-const fn gen_knight_move_table() -> [u64; 64] {
+fn gen_knight_move_table() -> [u64; 64] {
     let mut knight_moves = [0; 64];
 
     let mut i = 0;
@@ -391,7 +412,7 @@ const fn gen_knight_move_table() -> [u64; 64] {
     knight_moves
 }
 
-const fn gen_king_move_table() -> [u64; 64] {
+fn gen_king_move_table() -> [u64; 64] {
     let mut king_moves = [0; 64];
 
     let mut i = 0;
@@ -461,7 +482,7 @@ fn gen_bishop_move_table() {
     }
 }
 
-const fn gen_superray() -> [u64; 64] {
+fn gen_superray() -> [u64; 64] {
     let mut superray = [0; 64];
     let mut sq = 0;
     while sq < 64 {

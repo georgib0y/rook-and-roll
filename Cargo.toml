@@ -19,11 +19,11 @@ tower = "0.4.13"
 
 [profile.dev]
 debug = 2
-debuginfo-level = 1
 # opt-level=1
 
 [profile.release]
-lto = true
+# turned off to
+# lto = true
 
 [profile.test]
 debug = 2

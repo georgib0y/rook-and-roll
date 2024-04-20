@@ -8,7 +8,7 @@ use EntryScore::*;
 
 pub const EMPTY_HASH: u64 = 0;
 
-pub const TTABLE_SIZE: usize = 1 << 24; // 2^20
+pub const TTABLE_SIZE: usize = 1 << 24; // 2^23
 const TT_IDX_MASK: u64 = TTABLE_SIZE as u64 - 1;
 
 // pub const TTABLE_SIZE: usize = 65536; // 2^16
@@ -33,9 +33,9 @@ pub trait TT {
         Some(self.get_entry(hash)).filter(|e| e.hash != EMPTY_HASH)
     }
 
-    fn get_score(&self, hash: u64, draft: i32, ply: i32, alpha: i32, beta: i32) -> Option<i32> {
+    fn get_score(&self, hash: u64, depth: usize, ply: i32, alpha: i32, beta: i32) -> Option<i32> {
         self.get(hash)
-            .filter(|entry| entry.draft >= draft as i8)
+            .filter(|entry| entry.depth >= depth as i8)
             .and_then(|entry| entry.score.get_score(alpha, beta, ply))
     }
 
@@ -45,13 +45,13 @@ pub trait TT {
             .map(|entry| entry.best)
     }
 
-    fn insert(&mut self, hash: u64, score: EntryScore, best: Option<Move>, draft: i32) {
+    fn insert(&mut self, hash: u64, score: EntryScore, best: Option<Move>, depth: i8) {
         match self.get(hash) {
             Some(e) if !should_replace(e, score) => return,
             _ => {}
         }
 
-        self.set_entry(hash, TTEntry::new(hash, score, best, draft))
+        self.set_entry(hash, TTEntry::new(hash, score, best, depth))
     }
 
     fn print_stats(&self) {
@@ -237,16 +237,16 @@ fn adjust_retrieve(score: i32, ply: i32) -> i32 {
 pub struct TTEntry {
     pub hash: u64,
     pub score: EntryScore,
-    pub draft: i8,
+    pub depth: i8,
     pub best: Move,
 }
 
 impl TTEntry {
-    pub fn new(hash: u64, entry: EntryScore, best: Option<Move>, draft: i32) -> TTEntry {
+    pub fn new(hash: u64, entry: EntryScore, best: Option<Move>, depth: i8) -> TTEntry {
         TTEntry {
             hash,
             score: entry,
-            draft: draft as i8,
+            depth,
             best: best.unwrap_or(NULL_MOVE),
         }
     }
@@ -309,7 +309,9 @@ fn tt_insert_and_retrieve_is_correct() {
     let alpha = -50;
     let beta = 50;
 
-    // (insert entry score, insert draft, retrieve draft, expected score)
+    let root_depth = 10;
+
+    // (insert entry score, insert depth, retrieve depth, expected score)
     let inserts = [
         (PV(0), 0, 0, Some(0)),
         (PV(0), 0, 1, None),
@@ -317,17 +319,16 @@ fn tt_insert_and_retrieve_is_correct() {
         (Alpha(alpha + 1), 0, 0, None),
         (Beta(beta + 1), 0, 0, Some(beta)),
         (Beta(beta - 1), 0, 0, None),
-        (PV(CHECKMATE + 5), 5, 0, Some(CHECKMATE + 5)),
+        (PV(CHECKMATE + 5), 5, 0, Some(CHECKMATE + root_depth + 5)),
     ];
 
     let mut tt = &mut TTable::new();
 
-    for (i, (in_score, in_draft, ret_draft, exp_score)) in inserts.into_iter().enumerate() {
+    for (i, (in_score, in_depth, ret_depth, exp_score)) in inserts.into_iter().enumerate() {
         let hash = i as u64 + 1;
-        tt.insert(hash, in_score, None, in_draft);
-        assert_eq!(
-            tt.get_score(hash, ret_draft, ret_draft, alpha, beta),
-            exp_score
-        );
+        let ply = root_depth - ret_depth;
+        tt.insert(hash, in_score, None, in_depth);
+        let score = tt.get_score(hash, ret_depth as usize, ply as i32, alpha, beta);
+        assert_eq!(score, exp_score);
     }
 }

@@ -5,6 +5,7 @@ use crate::perft::HashPerft;
 use crate::searcher::{iterative_deepening, lazy_smp};
 use crate::uci::Uci;
 use http::run_http;
+use move_info::{PST, RAYS};
 use std::env::args;
 use std::time::Instant;
 use tt::{NoTTable, SmpTTable, TTable};
@@ -31,6 +32,8 @@ pub mod uci;
 
 pub fn init() {
     Zorb::init();
+    RAYS::init();
+    PST::init();
     MT::init();
 }
 

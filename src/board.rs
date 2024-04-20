@@ -176,9 +176,9 @@ impl Board {
 
     pub fn copy_make(&self, m: Move) -> Board {
         let (from, to, piece, xpiece, move_type) = m.all();
-        let from_to = SQUARES[from] | SQUARES[to];
 
         let mut board = *self;
+        let from_to = SQUARES[from] | SQUARES[to];
         board.set_pieces(piece, from_to);
         board.set_util(from_to);
         board.set_castle_state(piece, from, to);
@@ -440,7 +440,7 @@ const fn xorshift(mut x: u64) -> u64 {
     x
 }
 
-const fn gen_zorb() -> [u64; 781] {
+fn gen_zorb() -> [u64; 781] {
     let mut zorb = [0; 781];
 
     let mut rand = SEED;
